@@ -18,6 +18,7 @@ coreapi==2.3.3
 coreschema==0.0.4
 dataclasses-json==0.5.14
 decorator==5.1.1
+Deprecated==1.2.14
 dj-database-url==2.1.0
 Django==4.2.5
 django-rest-swagger==2.2.0
@@ -94,9 +95,11 @@ pydeck==0.8.0
 Pygments==2.16.1
 Pympler==1.0.1
 pyparsing==3.1.1
+pysendpulse==0.1.7
 python-dateutil==2.8.2
 python-docx==0.8.11
 python-dotenv==1.0.0
+python3-memcached==1.51
 pytz==2023.3.post1
 pytz-deprecation-shim==0.1.0.post0
 PyYAML==6.0.1
@@ -131,5 +134,6 @@ urllib3==1.26.16
 validators==0.22.0
 watchdog==3.0.0
 wcwidth==0.2.6
+wrapt==1.15.0
 yarl==1.9.2
 zipp==3.16.2

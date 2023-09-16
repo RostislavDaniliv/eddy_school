@@ -92,3 +92,4 @@ package-lock.json
 .uglify-cache.tmp
 **/static/mcss/
 **/static/mjs/
+

@@ -82,6 +82,9 @@ celerybeat-schedule
 venv/
 env/
 
+static/
+media/
+
 # local database
 db.sqlite3
 

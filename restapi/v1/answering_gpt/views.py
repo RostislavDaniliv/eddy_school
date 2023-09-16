@@ -61,7 +61,7 @@ class GPTAnswerView(APIView):
         documents_folder = f"./documents-{business_units.apikey}"
         documents_ids = business_units.documents_list.split(" ")[0]
         openai_key = business_units.gpt_api_key
-        credentials_file_name = business_units.google_creds.url
+        credentials_file_name = business_units.google_creds.path
 
         response = make_query(
             query_text,

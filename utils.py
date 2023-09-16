@@ -15,7 +15,7 @@ DISCOVERY_DOC = 'https://docs.googleapis.com/$discovery/rest?version=v1'
 
 def get_credentials(file_url):
     credentials = ServiceAccountCredentials.from_json_keyfile_name(
-        file_url[1:], [SCOPES, ]
+        file_url, [SCOPES, ]
     )
     return credentials
 

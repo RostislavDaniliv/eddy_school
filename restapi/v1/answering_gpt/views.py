@@ -30,9 +30,9 @@ class GPTAnswerView(APIView):
             Response: 200
         """
 
-        query_text = request.POST.get('query_text', None)
-        apikey = request.POST.get('apikey', None)
-        contact_id = request.POST.get('contact_id', '650346d4440c5d675704d7c6')
+        query_text = request.data.get('query_text', None)
+        apikey = request.data.get('apikey', None)
+        contact_id = request.data.get('contact_id', '650346d4440c5d675704d7c6')
 
         if not apikey:
             return HttpResponse("Apikey parameters are missing", status=401)
@@ -61,7 +61,7 @@ class GPTAnswerView(APIView):
         documents_folder = f"./documents-{business_units.apikey}"
         documents_ids = business_units.documents_list.split(" ")[0]
         openai_key = business_units.gpt_api_key
-        credentials_file_name = business_units.google_creds.path
+        credentials_file_name = f"eddy_school/media/google_creds/{business_units.google_creds.url.split('/')[3]}"
 
         response = make_query(
             query_text,

@@ -13,4 +13,4 @@ class BusinessUnitAdmin(admin.ModelAdmin):
         "name",
         "gpt_api_key",
     )
-    readonly_fields = ('apikey', 'sendpulse_token', 'last_update_sendpulse', )
+    readonly_fields = ('apikey', 'sendpulse_token', 'last_update_sendpulse', 'last_update_document', )

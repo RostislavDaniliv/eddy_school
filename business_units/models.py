@@ -16,6 +16,7 @@ class BusinessUnit(models.Model):
     last_update_sendpulse = models.DateTimeField(auto_now=False, blank=True, null=True)
     google_creds = models.FileField(upload_to='google_creds/', null=True, verbose_name="google credentials")
     default_text = models.CharField(max_length=600, blank=True, verbose_name="default text")
+    last_update_document = models.DateTimeField(auto_now=False, blank=True, null=True)
 
     def generate_new_apikey(self):
         key = None

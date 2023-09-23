@@ -72,10 +72,10 @@ class GPTAnswerView(APIView):
             credentials_file_name
         )
 
-        if response.response.startswith("I'm sorry,"):
+        if response['eval_result'] == "NO":
             response = business_units.default_text
         else:
-            response = response.response
+            response = response['response']
 
         headers = {"Authorization": f"Bearer {business_units.sendpulse_token}"}
         requests.post(f'{SEND_PULSE_URL}{SEND_PULSE_TELEGRAM_MESSAGE}', headers=headers, data={

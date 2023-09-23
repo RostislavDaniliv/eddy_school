@@ -9,6 +9,7 @@ from httplib2 import Http
 from langchain.chat_models import ChatOpenAI
 from llama_index import GPTVectorStoreIndex, LLMPredictor, ServiceContext, SimpleDirectoryReader, \
     load_index_from_storage, StorageContext
+from llama_index.evaluation import ResponseEvaluator
 from oauth2client.service_account import ServiceAccountCredentials
 
 from business_units.models import BusinessUnit
@@ -93,6 +94,7 @@ def make_query(query_text, document_id, documents_folder, index_name, openai_key
         llm=ChatOpenAI(model_name="gpt-3.5-turbo", temperature=0)
     )
     service_context = ServiceContext.from_defaults(llm_predictor=llm_predictor)
+    evaluator = ResponseEvaluator(service_context=service_context)
     if os.path.exists(index_name):
         index = load_index_from_storage(
             StorageContext.from_defaults(persist_dir=index_name),
@@ -107,4 +109,5 @@ def make_query(query_text, document_id, documents_folder, index_name, openai_key
 
     query_engine = index.as_query_engine()
     response = query_engine.query(query_text)
-    return response
+    eval_result = evaluator.evaluate(response)
+    return {"response": response.response, "eval_result": eval_result}

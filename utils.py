@@ -91,7 +91,7 @@ def make_query(query_text, document_id, documents_folder, index_name, openai_key
     with io.open(filename, 'wb') as f:
         f.write(read_structural_elements(doc_content).encode('utf-8'))
     llm_predictor = LLMPredictor(
-        llm=ChatOpenAI(model_name="gpt-3.5-turbo", temperature=0)
+        llm=ChatOpenAI(model_name="gpt-3.5-turbo", temperature=1)
     )
     service_context = ServiceContext.from_defaults(llm_predictor=llm_predictor)
     evaluator = ResponseEvaluator(service_context=service_context)

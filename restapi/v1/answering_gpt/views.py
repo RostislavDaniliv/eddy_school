@@ -72,7 +72,7 @@ class GPTAnswerView(APIView):
             credentials_file_name
         )
 
-        if response['eval_result'] == "NO":
+        if response['response'].startswith() == "I'm sorry":
             response = business_units.default_text
         else:
             response = response['response']

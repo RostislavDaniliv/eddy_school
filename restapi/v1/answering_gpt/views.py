@@ -7,10 +7,11 @@ from rest_framework.views import APIView
 
 from business_units.models import BusinessUnit
 from eddy_school.settings import SEND_PULSE_URL
-from utils import make_query
+from utils import make_query, translate_to_ukrainian
 
 SEND_PULSE_AUTH = '/oauth/access_token'
 SEND_PULSE_TELEGRAM_MESSAGE = '/telegram/contacts/sendText'
+SEND_PULSE_TELEGRAM_RUN_BY_TRIGGER = '/telegram/flows/runByTrigger'
 
 
 class GPTAnswerView(APIView):
@@ -72,15 +73,52 @@ class GPTAnswerView(APIView):
             credentials_file_name
         )
 
-        if response['response'].startswith("I'm sorry"):
-            response = business_units.default_text
-        else:
-            response = response['response']
-
         headers = {"Authorization": f"Bearer {business_units.sendpulse_token}"}
-        requests.post(f'{SEND_PULSE_URL}{SEND_PULSE_TELEGRAM_MESSAGE}', headers=headers, data={
-            "contact_id": contact_id,
-            "text": response
-        })
 
-        return JsonResponse({"response": response})
+        if business_units.bot_mode == BusinessUnit.STRICT_MODE:
+            if response['eval_result'] == "NO":
+                response = business_units.default_text
+            else:
+                response = response['response']
+        elif business_units.bot_mode == BusinessUnit.MANAGER_FLOW:
+            if response['eval_result'] == "NO":
+                r = requests.post(f'{SEND_PULSE_URL}{SEND_PULSE_TELEGRAM_RUN_BY_TRIGGER}', headers=headers, data={
+                    "contact_id": contact_id,
+                    "trigger_keyword": business_units.default_text,
+                })
+
+                return JsonResponse({"response": response, "sendpulse_cont": r.content.decode('utf-8')})
+        else:
+            if response['response'].startswith("I'm sorry"):
+                response = business_units.default_text
+            else:
+                response = response['response']
+
+        text_parts = []
+        current_part = ""
+        words = response.split()
+
+        for word in words:
+            if len(current_part) + len(word) + 1 <= 512:
+                if current_part:
+                    current_part += " "
+                current_part += word
+            else:
+                text_parts.append(current_part)
+                current_part = word
+
+        if current_part:
+            text_parts.append(current_part)
+
+        sendpulse_response = []
+
+        response = translate_to_ukrainian(response)
+
+        for i, part in enumerate(text_parts):
+            r = requests.post(f'{SEND_PULSE_URL}{SEND_PULSE_TELEGRAM_MESSAGE}', headers=headers, data={
+                "contact_id": contact_id,
+                "text": part
+            })
+            sendpulse_response.append(r.content.decode('utf-8'))
+
+        return JsonResponse({"response": response, "sendpulse_cont": sendpulse_response})

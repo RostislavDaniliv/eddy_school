@@ -5,6 +5,7 @@ import shutil
 
 import googleapiclient.discovery as discovery
 import openai
+from googletrans import Translator
 from httplib2 import Http
 from langchain.chat_models import ChatOpenAI
 from llama_index import GPTVectorStoreIndex, LLMPredictor, ServiceContext, SimpleDirectoryReader, \
@@ -90,9 +91,15 @@ def make_query(query_text, document_id, documents_folder, index_name, openai_key
         business_unit.save()
     with io.open(filename, 'wb') as f:
         f.write(read_structural_elements(doc_content).encode('utf-8'))
-    llm_predictor = LLMPredictor(
-        llm=ChatOpenAI(model_name="gpt-3.5-turbo", temperature=1)
-    )
+    temperature = business_unit.temperature
+    if business_unit.max_tokens:
+        llm_predictor = LLMPredictor(
+            llm=ChatOpenAI(model_name="gpt-3.5-turbo", temperature=temperature, max_tokens=business_unit.max_tokens)
+        )
+    else:
+        llm_predictor = LLMPredictor(
+            llm=ChatOpenAI(model_name="gpt-3.5-turbo", temperature=temperature)
+        )
     service_context = ServiceContext.from_defaults(llm_predictor=llm_predictor)
     evaluator = ResponseEvaluator(service_context=service_context)
     if os.path.exists(index_name):
@@ -109,6 +116,17 @@ def make_query(query_text, document_id, documents_folder, index_name, openai_key
 
     query_engine = index.as_query_engine()
     response = query_engine.query(query_text)
-    # eval_result = evaluator.evaluate(response)
-    # return {"response": response.response, "eval_result": eval_result}
-    return {"response": response.response, "eval_result": "YES"}
+    eval_result = evaluator.evaluate(response)
+    return {"response": response.response, "eval_result": eval_result}
+
+
+def translate_to_ukrainian(text):
+    translator = Translator()
+
+    source_lang = translator.detect(text).lang
+
+    if source_lang == 'en':
+        translation = translator.translate(text, src='en', dest='uk').text
+        return translation
+    else:
+        return text

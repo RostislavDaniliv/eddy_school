@@ -79,7 +79,7 @@ class GPTAnswerView(APIView):
             if response['eval_result'] == "NO":
                 response = business_units.default_text
             else:
-                response = response['response']
+                response = translate_to_ukrainian(response['response'])
         elif business_units.bot_mode == BusinessUnit.MANAGER_FLOW:
             if response['eval_result'] == "NO":
                 r = requests.post(f'{SEND_PULSE_URL}{SEND_PULSE_TELEGRAM_RUN_BY_TRIGGER}', headers=headers, data={
@@ -88,11 +88,13 @@ class GPTAnswerView(APIView):
                 })
 
                 return JsonResponse({"response": response, "sendpulse_cont": r.content.decode('utf-8')})
+            else:
+                response = translate_to_ukrainian(response['response'])
         else:
             if response['response'].startswith("I'm sorry"):
                 response = business_units.default_text
             else:
-                response = response['response']
+                response = translate_to_ukrainian(response['response'])
 
         text_parts = []
         current_part = ""
@@ -111,8 +113,6 @@ class GPTAnswerView(APIView):
             text_parts.append(current_part)
 
         sendpulse_response = []
-
-        response = translate_to_ukrainian(response)
 
         for i, part in enumerate(text_parts):
             r = requests.post(f'{SEND_PULSE_URL}{SEND_PULSE_TELEGRAM_MESSAGE}', headers=headers, data={

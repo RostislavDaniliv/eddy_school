@@ -64,7 +64,7 @@ class GPTAnswerView(APIView):
         openai_key = business_units.gpt_api_key
         credentials_file_name = f"eddy_school/media/google_creds/{business_units.google_creds.url.split('/')[3]}"
 
-        response = make_query(
+        response_q = make_query(
             query_text,
             documents_ids,
             documents_folder,
@@ -76,25 +76,25 @@ class GPTAnswerView(APIView):
         headers = {"Authorization": f"Bearer {business_units.sendpulse_token}"}
 
         if business_units.bot_mode == BusinessUnit.STRICT_MODE:
-            if response['eval_result'] == "NO":
+            if float(response_q['eval_result']) < business_units.eval_score:
                 response = business_units.default_text
             else:
-                response = translate_to_ukrainian(response['response'])
+                response = translate_to_ukrainian(response_q['response'])
         elif business_units.bot_mode == BusinessUnit.MANAGER_FLOW:
-            if response['eval_result'] == "NO":
+            if float(response_q['eval_result']) < business_units.eval_score:
                 r = requests.post(f'{SEND_PULSE_URL}{SEND_PULSE_TELEGRAM_RUN_BY_TRIGGER}', headers=headers, data={
                     "contact_id": contact_id,
                     "trigger_keyword": business_units.default_text,
                 })
 
-                return JsonResponse({"response": response, "sendpulse_cont": r.content.decode('utf-8')})
+                return JsonResponse({"response": response_q, "sendpulse_cont": r.content.decode('utf-8')})
             else:
-                response = translate_to_ukrainian(response['response'])
+                response = translate_to_ukrainian(response_q['response'])
         else:
-            if response['response'].startswith("I'm sorry"):
+            if response_q['response'].startswith("I'm sorry"):
                 response = business_units.default_text
             else:
-                response = translate_to_ukrainian(response['response'])
+                response = translate_to_ukrainian(response_q['response'])
 
         text_parts = []
         current_part = ""
@@ -121,4 +121,4 @@ class GPTAnswerView(APIView):
             })
             sendpulse_response.append(r.content.decode('utf-8'))
 
-        return JsonResponse({"response": response, "sendpulse_cont": sendpulse_response})
+        return JsonResponse({"response": response_q, "sendpulse_cont": sendpulse_response})

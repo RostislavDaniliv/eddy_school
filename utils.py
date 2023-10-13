@@ -1,7 +1,11 @@
+from __future__ import annotations
+from __future__ import annotations
+
 import datetime
 import io
 import os
 import shutil
+from typing import List, Optional
 
 import googleapiclient.discovery as discovery
 import openai
@@ -10,7 +14,11 @@ from httplib2 import Http
 from langchain.chat_models import ChatOpenAI
 from llama_index import GPTVectorStoreIndex, LLMPredictor, ServiceContext, SimpleDirectoryReader, \
     load_index_from_storage, StorageContext
-from llama_index.evaluation import ResponseEvaluator
+from llama_index.evaluation.base import DEFAULT_EVAL_PROMPT, DEFAULT_REFINE_PROMPT
+from llama_index.indices.list.base import SummaryIndex
+from llama_index.prompts.base import PromptTemplate
+from llama_index.response.schema import Response
+from llama_index.schema import Document
 from oauth2client.service_account import ServiceAccountCredentials
 
 from business_units.models import BusinessUnit
@@ -18,6 +26,87 @@ from business_units.models import BusinessUnit
 SCOPES = ['https://www.googleapis.com/auth/documents.readonly', 'https://www.googleapis.com/auth/drive']
 DISCOVERY_DOC = 'https://docs.googleapis.com/$discovery/rest?version=v1'
 DISCOVERY_DRIVE = 'https://www.googleapis.com/discovery/v1/apis/drive/v3/rest'
+
+REFINE_PROMPT = (
+    """
+    ## User Query
+        {query}
+
+    ## Reference Answer
+        {reference_answer}
+
+    ## Generated Answer
+        {generated_answer}
+    """
+)
+
+
+class ResponseEvaluator:
+    """Evaluate based on response from indices.
+
+    NOTE: this is a beta feature, subject to change!
+
+    Args:
+        service_context (Optional[ServiceContext]): ServiceContext object
+
+    """
+
+    def __init__(
+            self,
+            service_context: Optional[ServiceContext] = None,
+            eval_prompt_tmpl: Optional[PromptTemplate] = None,
+            refine_prompt_tmpl: Optional[PromptTemplate] = None,
+            raise_error: bool = False,
+    ) -> None:
+        """Init params."""
+        self.service_context = service_context or ServiceContext.from_defaults()
+        self.eval_prompt_tmpl = eval_prompt_tmpl or PromptTemplate(DEFAULT_EVAL_PROMPT)
+        self.refine_prompt_tmpl = refine_prompt_tmpl or PromptTemplate(
+            DEFAULT_REFINE_PROMPT
+        )
+
+        self.raise_error = raise_error
+
+    def get_context(self, response: Response) -> List[Document]:
+        """Get context information from given Response object using source nodes.
+
+        Args:
+            response (Response): Response object from an index based on the query.
+
+        Returns:
+            List of Documents of source nodes information as context information.
+        """
+
+        context = []
+
+        for context_info in response.source_nodes:
+            context.append(Document(text=context_info.node.get_content()))
+
+        return context
+
+    def evaluate(self, response: Response) -> str:
+        """Evaluate the response from an index.
+
+        Args:
+            query: Query for which response is generated from index.
+            response: Response object from an index based on the query.
+        """
+        answer = str(response)
+
+        context = self.get_context(response)
+        index = SummaryIndex.from_documents(
+            context, service_context=self.service_context
+        )
+
+        query_engine = index.as_query_engine(
+            text_qa_template=self.eval_prompt_tmpl,
+            refine_template=self.refine_prompt_tmpl,
+        )
+        response_obj = query_engine.query(answer)
+
+        raw_response_txt = str(response_obj)
+
+        return raw_response_txt.split("\n")[0]
 
 
 def get_credentials(file_url):
@@ -94,14 +183,13 @@ def make_query(query_text, document_id, documents_folder, index_name, openai_key
     temperature = business_unit.temperature
     if business_unit.max_tokens:
         llm_predictor = LLMPredictor(
-            llm=ChatOpenAI(model_name="gpt-3.5-turbo", temperature=temperature, max_tokens=business_unit.max_tokens)
+            llm=ChatOpenAI(model_name=business_unit.gpt_model, temperature=temperature, max_tokens=business_unit.max_tokens)
         )
     else:
         llm_predictor = LLMPredictor(
-            llm=ChatOpenAI(model_name="gpt-3.5-turbo", temperature=temperature)
+            llm=ChatOpenAI(model_name=business_unit.gpt_model, temperature=temperature)
         )
     service_context = ServiceContext.from_defaults(llm_predictor=llm_predictor)
-    evaluator = ResponseEvaluator(service_context=service_context)
     if os.path.exists(index_name):
         index = load_index_from_storage(
             StorageContext.from_defaults(persist_dir=index_name),
@@ -113,9 +201,22 @@ def make_query(query_text, document_id, documents_folder, index_name, openai_key
             documents, service_context=service_context
         )
         index.storage_context.persist(persist_dir=index_name)
-
     query_engine = index.as_query_engine()
     response = query_engine.query(query_text)
+    user_message = REFINE_PROMPT.format(
+        query=query_text,
+        reference_answer=index,
+        generated_answer=response
+    )
+    eval_promt = business_unit.eval_prompt.format(
+        answer=response,
+        query_str=query_text
+    )
+    evaluator = ResponseEvaluator(
+        service_context=service_context,
+        eval_prompt_tmpl=PromptTemplate(eval_promt),
+        refine_prompt_tmpl=PromptTemplate(user_message)
+    )
     eval_result = evaluator.evaluate(response)
     return {"response": response.response, "eval_result": eval_result}
 

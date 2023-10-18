@@ -3,12 +3,15 @@ from __future__ import annotations
 
 import datetime
 import io
+import json
 import os
 import shutil
+from http.client import OK
 from typing import List, Optional
 
 import googleapiclient.discovery as discovery
 import openai
+import requests
 from googletrans import Translator
 from httplib2 import Http
 from langchain.chat_models import ChatOpenAI
@@ -22,6 +25,18 @@ from llama_index.schema import Document
 from oauth2client.service_account import ServiceAccountCredentials
 
 from business_units.models import BusinessUnit
+from eddy_school.settings import SEND_PULSE_URL
+
+SEND_PULSE_AUTH = '/oauth/access_token'
+
+SEND_PULSE_TELEGRAM_MESSAGE = '/telegram/contacts/sendText'
+SEND_PULSE_TELEGRAM_RUN_BY_TRIGGER = '/telegram/flows/runByTrigger'
+
+SEND_PULSE_VIBER_MESSAGE = '/viber/chatbots/contacts/send'
+SEND_PULSE_VIBER_RUN_BY_TRIGGER = '/viber/chatbots/flows/runByTrigger'
+
+SEND_PULSE_LIVE_CHAT_MESSAGE = '/live-chat/contacts/send'
+SEND_PULSE_LIVE_CHAT_RUN_BY_TRIGGER = '/live-chat/flows/runByTrigger'
 
 SCOPES = ['https://www.googleapis.com/auth/documents.readonly', 'https://www.googleapis.com/auth/drive']
 DISCOVERY_DOC = 'https://docs.googleapis.com/$discovery/rest?version=v1'
@@ -224,10 +239,88 @@ def make_query(query_text, document_id, documents_folder, index_name, openai_key
 def translate_to_ukrainian(text):
     translator = Translator()
 
-    source_lang = translator.detect(text).lang
+    try:
+        source_lang = translator.detect(text).lang
 
-    if source_lang == 'en':
-        translation = translator.translate(text, src='en', dest='uk').text
-        return translation
-    else:
+        if source_lang == 'en':
+            translation = translator.translate(text, src='en', dest='uk').text
+            return translation
+        else:
+            return text
+    except:
         return text
+
+
+def send_pulse_flow(request_type, business_units, contact_id=None, source_type=None, **kwargs):
+    headers = {"Authorization": f"Bearer {business_units.sendpulse_token}"}
+
+    if request_type == "auth":
+        datetime_now = datetime.datetime.now(datetime.timezone.utc)
+
+        data = {
+            "grant_type": "client_credentials",
+            "client_id": business_units.sendpulse_id,
+            "client_secret": business_units.sendpulse_secret
+        }
+        sendpulse_auth = json.loads(requests.post(f'{SEND_PULSE_URL}{SEND_PULSE_AUTH}', data=data).text)
+
+        business_units.sendpulse_token = sendpulse_auth.get('access_token', None)
+        business_units.last_update_sendpulse = datetime_now
+        business_units.save()
+        return OK
+
+    elif request_type == "word_trigger":
+        send_pulse_url = {
+            "telegram": SEND_PULSE_TELEGRAM_RUN_BY_TRIGGER,
+            "viber": SEND_PULSE_VIBER_RUN_BY_TRIGGER,
+            "live_chat": SEND_PULSE_LIVE_CHAT_RUN_BY_TRIGGER,
+        }[source_type]
+
+        request_data = {
+            "contact_id": contact_id,
+            "trigger_keyword": business_units.default_text,
+        }
+
+        r = requests.post(
+            f"{SEND_PULSE_URL}{send_pulse_url}", headers=headers, data=request_data
+        )
+
+        return r
+
+    elif request_type == "send_message":
+        part = kwargs.get("part", None)
+
+        if part and source_type == "telegram":
+            r = requests.post(f'{SEND_PULSE_URL}{SEND_PULSE_TELEGRAM_MESSAGE}', headers=headers, data={
+                "contact_id": contact_id,
+                "text": part
+            })
+            return r
+
+        elif part and source_type == "viber":
+            r = requests.post(f'{SEND_PULSE_URL}{SEND_PULSE_VIBER_MESSAGE}', headers=headers, json={
+                "contact_id": contact_id,
+                "messages": [
+                    {
+                        "type": "text",
+                        "text": {
+                            "text": part
+                        }
+                    }
+                ]
+            })
+            return r
+
+        elif part and source_type == "live_chat":
+            r = requests.post(f'{SEND_PULSE_URL}{SEND_PULSE_LIVE_CHAT_MESSAGE}', headers=headers, json={
+                "contact_id": contact_id,
+                "messages": [
+                    {
+                        "type": "text",
+                        "text": {
+                            "text": part
+                        }
+                    }
+                ]
+            })
+            return r

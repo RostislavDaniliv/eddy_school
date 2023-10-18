@@ -1,17 +1,10 @@
 import datetime
-import json
 
-import requests
 from django.http import HttpResponse, JsonResponse
 from rest_framework.views import APIView
 
 from business_units.models import BusinessUnit
-from eddy_school.settings import SEND_PULSE_URL
-from utils import make_query, translate_to_ukrainian
-
-SEND_PULSE_AUTH = '/oauth/access_token'
-SEND_PULSE_TELEGRAM_MESSAGE = '/telegram/contacts/sendText'
-SEND_PULSE_TELEGRAM_RUN_BY_TRIGGER = '/telegram/flows/runByTrigger'
+from utils import make_query, translate_to_ukrainian, send_pulse_flow
 
 
 class GPTAnswerView(APIView):
@@ -27,13 +20,15 @@ class GPTAnswerView(APIView):
                 - "query_text": текст запитання від користувача.
                 - "apikey": apikey бізнес одиниці (бота).
                 - "contact_id": ід клієнта.
+                - "source_type: тип зв'язку.
 
             Response: 200
         """
 
         query_text = request.data.get('query_text', None)
         apikey = request.data.get('apikey', None)
-        contact_id = request.data.get('contact_id', '650346d4440c5d675704d7c6')
+        contact_id = request.data.get('contact_id', None)
+        source_type = request.data.get('source_type', None)
 
         if not apikey:
             return HttpResponse("Apikey parameters are missing", status=401)
@@ -47,16 +42,7 @@ class GPTAnswerView(APIView):
 
         if (not business_units.sendpulse_token or
                 datetime_now - business_units.last_update_sendpulse > datetime.timedelta(minutes=50)):
-            data = {
-                "grant_type": "client_credentials",
-                "client_id": business_units.sendpulse_id,
-                "client_secret": business_units.sendpulse_secret
-            }
-            sendpulse_auth = json.loads(requests.post(f'{SEND_PULSE_URL}{SEND_PULSE_AUTH}', data=data).text)
-
-            business_units.sendpulse_token = sendpulse_auth.get('access_token', None)
-            business_units.last_update_sendpulse = datetime_now
-            business_units.save()
+            send_pulse_flow(request_type="auth", business_units=business_units)
 
         index_name = f"./saved_index-{business_units.apikey}"
         documents_folder = f"./documents-{business_units.apikey}"
@@ -73,8 +59,6 @@ class GPTAnswerView(APIView):
             credentials_file_name
         )
 
-        headers = {"Authorization": f"Bearer {business_units.sendpulse_token}"}
-
         if business_units.bot_mode == BusinessUnit.STRICT_MODE:
             if float(response_q['eval_result']) < business_units.eval_score:
                 response = business_units.default_text
@@ -82,10 +66,12 @@ class GPTAnswerView(APIView):
                 response = translate_to_ukrainian(response_q['response'])
         elif business_units.bot_mode == BusinessUnit.MANAGER_FLOW:
             if float(response_q['eval_result']) < business_units.eval_score:
-                r = requests.post(f'{SEND_PULSE_URL}{SEND_PULSE_TELEGRAM_RUN_BY_TRIGGER}', headers=headers, data={
-                    "contact_id": contact_id,
-                    "trigger_keyword": business_units.default_text,
-                })
+                r = send_pulse_flow(
+                    request_type="word_trigger",
+                    business_units=business_units,
+                    contact_id=contact_id,
+                    source_type=source_type
+                )
 
                 return JsonResponse({"response": response_q, "sendpulse_cont": r.content.decode('utf-8')})
             else:
@@ -115,10 +101,13 @@ class GPTAnswerView(APIView):
         sendpulse_response = []
 
         for i, part in enumerate(text_parts):
-            r = requests.post(f'{SEND_PULSE_URL}{SEND_PULSE_TELEGRAM_MESSAGE}', headers=headers, data={
-                "contact_id": contact_id,
-                "text": part
-            })
+            r = send_pulse_flow(
+                request_type="send_message",
+                business_units=business_units,
+                contact_id=contact_id,
+                part=part,
+                source_type=source_type
+            )
             sendpulse_response.append(r.content.decode('utf-8'))
 
         return JsonResponse({"response": response_q, "sendpulse_cont": sendpulse_response})

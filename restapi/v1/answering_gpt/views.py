@@ -29,6 +29,7 @@ class GPTAnswerView(APIView):
         apikey = request.data.get('apikey', None)
         contact_id = request.data.get('contact_id', None)
         source_type = request.data.get('source_type', None)
+        llm_context = request.data.get('llm_context', None)
 
         if not apikey:
             return HttpResponse("Apikey parameters are missing", status=401)
@@ -110,4 +111,5 @@ class GPTAnswerView(APIView):
             )
             sendpulse_response.append(r.content.decode('utf-8'))
 
-        return JsonResponse({"response": response_q, "sendpulse_cont": sendpulse_response})
+        return JsonResponse({"user_question": query_text, "response": response_q,
+                             "sendpulse_cont": sendpulse_response})

@@ -42,6 +42,7 @@ class BusinessUnit(models.Model):
     gpt_model = models.CharField(choices=MODEL_GPT, default=GPT_3_5_TURBO,
                                  verbose_name='GPT model')
     eval_prompt = models.TextField(null=True, blank=True, verbose_name="eval promt")
+    system_prompt = models.TextField(null=True, blank=True, verbose_name="system prompt")
     eval_score = models.FloatField(default=3, verbose_name="eval score (max 5)")
 
     def generate_new_apikey(self):

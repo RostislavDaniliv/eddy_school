@@ -13,8 +13,7 @@ import openai
 import requests
 from googletrans import Translator
 from httplib2 import Http
-from langchain.chat_models import ChatOpenAI
-from llama_index import GPTVectorStoreIndex, LLMPredictor, ServiceContext, SimpleDirectoryReader, \
+from llama_index import GPTVectorStoreIndex, ServiceContext, SimpleDirectoryReader, \
     load_index_from_storage, StorageContext
 from llama_index.llms import ChatMessage, MessageRole, OpenAI
 from llama_index.prompts.base import ChatPromptTemplate
@@ -165,17 +164,14 @@ def make_query(query_text, document_id, documents_folder, index_name, openai_key
         business_unit.save()
     with io.open(filename, 'wb') as f:
         f.write(read_structural_elements(doc_content).encode('utf-8'))
-    temperature = business_unit.temperature
+        temperature = business_unit.temperature
     if business_unit.max_tokens:
-        llm_predictor = LLMPredictor(
-            llm=ChatOpenAI(model_name=business_unit.gpt_model, temperature=temperature,
-                           max_tokens=business_unit.max_tokens)
-        )
+        llm = OpenAI(model=business_unit.gpt_model, temperature=temperature,
+                     max_tokens=business_unit.max_tokens)
     else:
-        llm_predictor = LLMPredictor(
-            llm=ChatOpenAI(model_name=business_unit.gpt_model, temperature=temperature)
-        )
-    service_context = ServiceContext.from_defaults(llm_predictor=llm_predictor,
+        llm = OpenAI(model=business_unit.gpt_model, temperature=temperature)
+
+    service_context = ServiceContext.from_defaults(llm=llm,
                                                    system_prompt=business_unit.system_prompt)
     if os.path.exists(index_name):
         index = load_index_from_storage(
@@ -188,7 +184,8 @@ def make_query(query_text, document_id, documents_folder, index_name, openai_key
             documents, service_context=service_context
         )
         index.storage_context.persist(persist_dir=index_name)
-    query_engine = index.as_query_engine()
+
+    query_engine = index.as_query_engine(similarity_top_k=1)
     response = query_engine.query(query_text)
 
     context = []
@@ -196,7 +193,7 @@ def make_query(query_text, document_id, documents_folder, index_name, openai_key
     for context_info in response.source_nodes:
         context.append(Document(text=context_info.node.get_content()).text)
 
-    context = f"{context[0]}\n\n{context[1]}"
+    context = f"{context[0]}"
 
     eval_chat_template = ChatPromptTemplate(
         message_templates=[

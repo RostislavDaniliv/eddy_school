@@ -28,7 +28,7 @@ class GPTAnswerView(APIView):
         query_text = request.data.get('query_text', None)
         apikey = request.data.get('apikey', None)
         contact_id = request.data.get('contact_id', None)
-        source_type = request.data.get('source_type', None)
+        source_type = request.data.get('source_type', "telegram")
         llm_context = request.data.get('llm_context', None)
 
         if not apikey:

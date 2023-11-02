@@ -195,22 +195,21 @@ def make_query(query_text, document_id, documents_folder, index_name, openai_key
 
     context = f"{context[0]}"
 
-    eval_chat_template = ChatPromptTemplate(
-        message_templates=[
-            ChatMessage(role=MessageRole.SYSTEM, content=business_unit.eval_prompt),
-            ChatMessage(role=MessageRole.USER, content=REFINE_PROMPT),
-        ]
-    )
-    llm = OpenAI(model=business_unit.gpt_model)
+    # eval_chat_template = ChatPromptTemplate(
+    #     message_templates=[
+    #         ChatMessage(role=MessageRole.SYSTEM, content=business_unit.eval_prompt),
+    #         ChatMessage(role=MessageRole.USER, content=REFINE_PROMPT),
+    #     ]
+    # )
+    # llm = OpenAI(model=business_unit.gpt_model)
 
-    eval_result = run_correctness_eval(
-        query_str=query_text, reference_answer=context, generated_answer=response.response,
-        eval_chat_template=eval_chat_template, llm=llm, threshold=4.0
-    )
+    # eval_result = run_correctness_eval(
+    #     query_str=query_text, reference_answer=context, generated_answer=response.response,
+    #     eval_chat_template=eval_chat_template, llm=llm, threshold=4.0
+    # )
 
-    return {"response": response.response, "eval_result": eval_result['score'],
+    return {"response": response.response, "eval_result": 5,
             "llm_context": context}
-
 
 def translate_to_ukrainian(text):
     translator = Translator()

@@ -66,7 +66,7 @@ class GPTAnswerView(APIView):
             else:
                 response = translate_to_ukrainian(response_q['response'])
         elif business_units.bot_mode == BusinessUnit.MANAGER_FLOW:
-            if float(response_q['eval_result']) < business_units.eval_score:
+            if response_q['response'] == business_units.default_text:
                 r = send_pulse_flow(
                     request_type="word_trigger",
                     business_units=business_units,

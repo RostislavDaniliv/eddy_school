@@ -11,7 +11,9 @@ class BusinessUnit(models.Model):
     SOFT_MODE = 3
 
     GPT_3_5_TURBO = "gpt-3.5-turbo"
+    GPT_3_5_TURBO_NEW = "gpt-3.5-turbo-1106"
     GPT_4 = "gpt-4"
+    GPT_4_TURBO = "gpt-4-1106-preview"
 
     BOT_MODE = (
         (STRICT_MODE, "Strict mode"),
@@ -20,8 +22,10 @@ class BusinessUnit(models.Model):
     )
 
     MODEL_GPT = (
-        (GPT_3_5_TURBO, "Gpt 3.5"),
+        (GPT_3_5_TURBO, "Gpt 3.5 old turbo"),
+        (GPT_3_5_TURBO_NEW, "Gpt 3.5 new turbo"),
         (GPT_4, "Gpt 4"),
+        (GPT_4_TURBO, "Gpt 4 preview (Turbo)"),
     )
 
     apikey = models.CharField(max_length=128, blank=True, verbose_name="apikey")

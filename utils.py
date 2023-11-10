@@ -11,12 +11,10 @@ from http.client import OK
 import googleapiclient.discovery as discovery
 import openai
 import requests
-from googletrans import Translator
 from httplib2 import Http
 from llama_index import GPTVectorStoreIndex, ServiceContext, SimpleDirectoryReader, \
     load_index_from_storage, StorageContext
-from llama_index.llms import ChatMessage, MessageRole, OpenAI
-from llama_index.prompts.base import ChatPromptTemplate
+from llama_index.llms import OpenAI
 from llama_index.schema import Document
 from oauth2client.service_account import ServiceAccountCredentials
 
@@ -211,19 +209,21 @@ def make_query(query_text, document_id, documents_folder, index_name, openai_key
     return {"response": response.response, "eval_result": 5,
             "llm_context": context}
 
+
 def translate_to_ukrainian(text):
-    translator = Translator()
-
-    try:
-        source_lang = translator.detect(text).lang
-
-        if source_lang == 'en':
-            translation = translator.translate(text, src='en', dest='uk').text
-            return translation
-        else:
-            return text
-    except:
-        return text
+    return text
+    # translator = Translator()
+    #
+    # try:
+    #     source_lang = translator.detect(text).lang
+    #
+    #     if source_lang == 'en':
+    #         translation = translator.translate(text, src='en', dest='uk').text
+    #         return translation
+    #     else:
+    #         return text
+    # except:
+    #     return text
 
 
 def send_pulse_flow(request_type, business_units, contact_id=None, source_type=None, **kwargs):

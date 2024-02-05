@@ -131,3 +131,5 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 REST_FRAMEWORK = {'DEFAULT_SCHEMA_CLASS': 'rest_framework.schemas.coreapi.AutoSchema'}
 
 SEND_PULSE_URL = os.getenv('SEND_PULSE_URL', 'https://api.sendpulse.com')
+
+SMART_SENDER_URL = os.getenv('SMART_SENDER_URL', 'https://api.smartsender.com')

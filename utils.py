@@ -6,6 +6,7 @@ import io
 import json
 import os
 import shutil
+import time
 from http.client import OK
 
 import googleapiclient.discovery as discovery
@@ -19,7 +20,7 @@ from llama_index.schema import Document
 from oauth2client.service_account import ServiceAccountCredentials
 
 from business_units.models import BusinessUnit
-from eddy_school.settings import SEND_PULSE_URL
+from eddy_school.settings import SEND_PULSE_URL, SMART_SENDER_URL
 
 SEND_PULSE_AUTH = '/oauth/access_token'
 
@@ -31,6 +32,9 @@ SEND_PULSE_VIBER_RUN_BY_TRIGGER = '/viber/chatbots/flows/runByTrigger'
 
 SEND_PULSE_LIVE_CHAT_MESSAGE = '/live-chat/contacts/send'
 SEND_PULSE_LIVE_CHAT_RUN_BY_TRIGGER = '/live-chat/flows/runByTrigger'
+
+SMART_SENDER_MESSAGE = '/v1/contacts/{contactId}/send'
+SMART_SENDER_RUN_BY_TRIGGER = '/v1/contacts/{contactId}/fire'
 
 SCOPES = ['https://www.googleapis.com/auth/documents.readonly', 'https://www.googleapis.com/auth/drive']
 DISCOVERY_DOC = 'https://docs.googleapis.com/$discovery/rest?version=v1'
@@ -226,6 +230,26 @@ def translate_to_ukrainian(text):
     #     return text
 
 
+def smart_sender_flow(request_type, business_units, contact_id=None, response=None):
+    headers = {"Authorization": f"Bearer {business_units.smart_sender_token}"}
+
+    if request_type == "send_message":
+        r = requests.post(f'{SMART_SENDER_URL}{SMART_SENDER_MESSAGE.format(contactId=contact_id)}', headers=headers,
+                          data={
+                              "content": response,
+                              "type": "text",
+                              "watermark": int(time.time())
+                          })
+        return r
+    elif request_type == "word_trigger":
+        r = requests.post(f'{SMART_SENDER_URL}{SMART_SENDER_RUN_BY_TRIGGER.format(contactId=contact_id)}',
+                          headers=headers,
+                          data={
+                              "name": business_units.default_text
+                          })
+        return r
+
+
 def send_pulse_flow(request_type, business_units, contact_id=None, source_type=None, **kwargs):
     headers = {"Authorization": f"Bearer {business_units.sendpulse_token}"}
 
@@ -299,3 +323,44 @@ def send_pulse_flow(request_type, business_units, contact_id=None, source_type=N
                 ]
             })
             return r
+
+
+def gpt_assistant_query(query_text, business_unit, openai_key):
+    openai.api_key = openai_key
+    os.environ["OPENAI_API_KEY"] = openai.api_key
+
+    client = openai.OpenAI()
+    thread = client.beta.threads.create()
+
+    message = client.beta.threads.messages.create(
+        thread_id=thread.id,
+        role="user",
+        content=query_text
+    )
+
+    run = client.beta.threads.runs.create(
+        thread_id=thread.id,
+        assistant_id=business_unit.gpt_assistant_id
+    )
+
+    while True:
+        time.sleep(5)
+
+        run_status = client.beta.threads.runs.retrieve(
+            thread_id=thread.id,
+            run_id=run.id
+        )
+
+        if run_status.status == 'completed':
+            messages = client.beta.threads.messages.list(
+                thread_id=thread.id
+            )
+
+            for msg in messages.data:
+                role = msg.role
+                content = msg.content[0].text.value
+                if role.capitalize() == 'Assistant':
+                    return {"response": content, "eval_result": 5,
+                            "llm_context": "None, it's GPT assistant mode!"}
+
+            break

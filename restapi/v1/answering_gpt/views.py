@@ -4,7 +4,7 @@ from django.http import HttpResponse, JsonResponse
 from rest_framework.views import APIView
 
 from business_units.models import BusinessUnit
-from utils import make_query, translate_to_ukrainian, send_pulse_flow
+from utils import make_query, translate_to_ukrainian, send_pulse_flow, gpt_assistant_query, smart_sender_flow
 
 
 class GPTAnswerView(APIView):
@@ -51,14 +51,17 @@ class GPTAnswerView(APIView):
         openai_key = business_units.gpt_api_key
         credentials_file_name = f"eddy_school/media/google_creds/{business_units.google_creds.url.split('/')[3]}"
 
-        response_q = make_query(
-            query_text,
-            documents_ids,
-            documents_folder,
-            index_name,
-            openai_key,
-            credentials_file_name
-        )
+        if business_units.script_mode == BusinessUnit.LLM_MODE:
+            response_q = make_query(
+                query_text,
+                documents_ids,
+                documents_folder,
+                index_name,
+                openai_key,
+                credentials_file_name
+            )
+        else:
+            response_q = gpt_assistant_query(query_text, business_units, openai_key)
 
         if business_units.bot_mode == BusinessUnit.STRICT_MODE:
             if float(response_q['eval_result']) < business_units.eval_score:
@@ -67,12 +70,19 @@ class GPTAnswerView(APIView):
                 response = translate_to_ukrainian(response_q['response'])
         elif business_units.bot_mode == BusinessUnit.MANAGER_FLOW:
             if response_q['response'] == business_units.default_text:
-                r = send_pulse_flow(
-                    request_type="word_trigger",
-                    business_units=business_units,
-                    contact_id=contact_id,
-                    source_type=source_type
-                )
+                if business_units.sending_service == BusinessUnit.SEND_PULSE:
+                    r = send_pulse_flow(
+                        request_type="word_trigger",
+                        business_units=business_units,
+                        contact_id=contact_id,
+                        source_type=source_type
+                    )
+                else:
+                    r = smart_sender_flow(
+                        request_type="word_trigger",
+                        business_units=business_units,
+                        contact_id=contact_id,
+                    )
 
                 return JsonResponse({"response": response_q, "sendpulse_cont": r.content.decode('utf-8')})
             else:
@@ -101,15 +111,25 @@ class GPTAnswerView(APIView):
 
         sendpulse_response = []
 
-        for i, part in enumerate(text_parts):
-            r = send_pulse_flow(
+        if business_units.sending_service == BusinessUnit.SEND_PULSE:
+            for i, part in enumerate(text_parts):
+                r = send_pulse_flow(
+                    request_type="send_message",
+                    business_units=business_units,
+                    contact_id=contact_id,
+                    part=part,
+                    source_type=source_type
+                )
+                sendpulse_response.append(r.content.decode('utf-8'))
+
+            return JsonResponse({"user_question": query_text, "response": response_q,
+                                     "sendpulse_cont": sendpulse_response})
+        else:
+            r = smart_sender_flow(
                 request_type="send_message",
                 business_units=business_units,
                 contact_id=contact_id,
-                part=part,
-                source_type=source_type
+                response=response
             )
-            sendpulse_response.append(r.content.decode('utf-8'))
-
-        return JsonResponse({"user_question": query_text, "response": response_q,
-                             "sendpulse_cont": sendpulse_response})
+            return JsonResponse({"user_question": query_text, "response": response_q['response'],
+                                 "smart_sender": r.content.decode('utf-8')})

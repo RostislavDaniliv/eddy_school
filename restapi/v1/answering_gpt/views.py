@@ -21,6 +21,7 @@ class GPTAnswerView(APIView):
                 - "apikey": apikey бізнес одиниці (бота).
                 - "contact_id": ід клієнта.
                 - "source_type: тип зв'язку.
+                - "document_id: ід документу (Для лендінг пейджа).
 
             Response: 200
         """
@@ -30,6 +31,8 @@ class GPTAnswerView(APIView):
         contact_id = request.data.get('contact_id', None)
         source_type = request.data.get('source_type', "telegram")
         llm_context = request.data.get('llm_context', None)
+        document_id = request.data.get('document_id', None)
+        resave_documents = True
 
         if not apikey:
             return HttpResponse("Apikey parameters are missing", status=401)
@@ -47,18 +50,21 @@ class GPTAnswerView(APIView):
 
         index_name = f"./saved_index-{business_units.apikey}"
         documents_folder = f"./documents-{business_units.apikey}"
-        documents_ids = business_units.documents_list.split(" ")[0]
+        if not document_id:
+            document_id = business_units.documents_list.split(" ")[0]
+            resave_documents = False
         openai_key = business_units.gpt_api_key
         credentials_file_name = f"eddy_school/media/google_creds/{business_units.google_creds.url.split('/')[3]}"
 
         if business_units.script_mode == BusinessUnit.LLM_MODE:
             response_q = make_query(
                 query_text,
-                documents_ids,
+                document_id,
                 documents_folder,
                 index_name,
                 openai_key,
-                credentials_file_name
+                credentials_file_name,
+                resave_documents
             )
         else:
             response_q = gpt_assistant_query(query_text, business_units, openai_key)

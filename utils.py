@@ -60,7 +60,7 @@ REFINE_PROMPT = (
 
 def get_credentials(file_url):
     credentials = ServiceAccountCredentials.from_json_keyfile_name(
-        file_url, SCOPES
+        '/Users/rostik/PycharmProjects/eddy_school/token.json', SCOPES
     )
     return credentials
 
@@ -128,7 +128,7 @@ def run_correctness_eval(
             return {"score": score}
 
 
-def make_query(query_text, document_id, documents_folder, index_name, openai_key, file_url):
+def make_query(query_text, document_id, documents_folder, index_name, openai_key, file_url, resave_documents=False):
     openai.api_key = openai_key
     os.environ["OPENAI_API_KEY"] = openai.api_key
     credentials = get_credentials(file_url)
@@ -144,6 +144,15 @@ def make_query(query_text, document_id, documents_folder, index_name, openai_key
         drive.files().get(fileId=document_id, fields='*').execute()['modifiedTime'], '%Y-%m-%dT%H:%M:%S.%fZ')
 
     business_unit = BusinessUnit.objects.filter(apikey=documents_folder.split('documents-')[1]).first()
+
+    if resave_documents:
+        business_unit.last_update_document = None
+        business_unit.save()
+
+        if os.path.exists(documents_folder):
+            shutil.rmtree(documents_folder)
+        if os.path.exists(index_name):
+            shutil.rmtree(index_name)
 
     filename = os.path.join(documents_folder, doc['title'] + '.txt')
 

@@ -373,7 +373,3 @@ def gpt_assistant_query(query_text, business_unit, openai_key):
                             "llm_context": "None, it's GPT assistant mode!"}
 
             break
-
-
-# test commit
-

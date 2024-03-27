@@ -136,6 +136,10 @@ def make_query(query_text, document_ids, documents_folder, index_name, openai_ke
     http = credentials.authorize(Http())
     business_unit = BusinessUnit.objects.filter(apikey=documents_folder.split('documents-')[1]).first()
 
+    if not business_unit.last_used_documents_list:
+        resave_documents = True
+        business_unit.last_used_documents_list = document_ids
+        business_unit.save()
     if document_ids != eval(business_unit.last_used_documents_list):
         resave_documents = True
         business_unit.last_used_documents_list = document_ids

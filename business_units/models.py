@@ -53,14 +53,20 @@ class BusinessUnit(models.Model):
     sendpulse_token = models.TextField(blank=True, verbose_name="sendpulse token")
     smart_sender_token = models.TextField(blank=True, verbose_name="Smartsender token")
     last_update_sendpulse = models.DateTimeField(auto_now=False, blank=True, null=True)
+    last_used_documents_list = models.TextField(blank=True, verbose_name="last used documents list")
     google_creds = models.FileField(upload_to='google_creds/', null=True, verbose_name="google credentials")
     default_text = models.CharField(max_length=600, blank=True, verbose_name="default text")
+    panic_text = models.CharField(max_length=600, blank=True, verbose_name="panic text")
     last_update_document = models.DateTimeField(auto_now=False, blank=True, null=True)
     temperature = models.FloatField(default=0, verbose_name="temperature")
     max_tokens = models.IntegerField(default=0, verbose_name="max tokens")
+    chunk_size = models.IntegerField(default=0, verbose_name="chunk size")
+    chunk_overlap = models.IntegerField(default=0, verbose_name="chunk overlap")
+    similarity_top_k = models.IntegerField(default=0, verbose_name="similarity top k")
+    chunk_splitter = models.CharField(max_length=10, null=True, blank=True, verbose_name='chunk splitter')
     bot_mode = models.PositiveIntegerField(choices=BOT_MODE, default=STRICT_MODE,
                                            verbose_name='bot mode')
-    gpt_model = models.CharField(choices=MODEL_GPT, default=GPT_3_5_TURBO,
+    gpt_model = models.CharField(max_length=100, choices=MODEL_GPT, default=GPT_3_5_TURBO,
                                  verbose_name='GPT model')
     eval_prompt = models.TextField(null=True, blank=True, verbose_name="eval promt")
     system_prompt = models.TextField(null=True, blank=True, verbose_name="system prompt")
@@ -70,6 +76,10 @@ class BusinessUnit(models.Model):
     script_mode = models.PositiveIntegerField(choices=SCRIPT_MODE, default=LLM_MODE,
                                               verbose_name='Script mode')
     gpt_assistant_id = models.CharField(max_length=128, blank=True, verbose_name="GPT assistant id")
+    is_active = models.BooleanField(default=True)
+
+    def __str__(self):
+        return f"{self.name} - {self.apikey}"
 
     def generate_new_apikey(self):
         key = None
@@ -89,3 +99,12 @@ class BusinessUnit(models.Model):
         if not self.apikey:
             self.generate_new_apikey()
         super(BusinessUnit, self).save(*args, **kwargs)
+
+
+class Document(models.Model):
+    name = models.CharField(max_length=100, blank=True, null=True)
+    document_id = models.CharField(max_length=100, unique=True)
+    business_unit = models.ForeignKey(BusinessUnit, on_delete=models.SET_NULL, null=True, blank=True)
+
+    def __str__(self):
+        return f"{self.name} - {self.document_id}"

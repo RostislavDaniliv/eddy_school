@@ -12,6 +12,7 @@ from http.client import OK
 import googleapiclient.discovery as discovery
 import openai
 import requests
+from googleapiclient.errors import HttpError
 from httplib2 import Http
 from llama_index import GPTVectorStoreIndex, ServiceContext, SimpleDirectoryReader, \
     load_index_from_storage, StorageContext
@@ -128,22 +129,52 @@ def run_correctness_eval(
             return {"score": score}
 
 
-def make_query(query_text, document_id, documents_folder, index_name, openai_key, file_url, resave_documents=False):
+def make_query(query_text, document_ids, documents_folder, index_name, openai_key, file_url, resave_documents=False):
     openai.api_key = openai_key
     os.environ["OPENAI_API_KEY"] = openai.api_key
     credentials = get_credentials(file_url)
     http = credentials.authorize(Http())
+    business_unit = BusinessUnit.objects.filter(apikey=documents_folder.split('documents-')[1]).first()
+
+    if document_ids != eval(business_unit.last_used_documents_list):
+        resave_documents = True
+        business_unit.last_used_documents_list = document_ids
+        business_unit.save()
+
     docs_service = discovery.build(
         'docs', 'v1', http=http, discoveryServiceUrl=DISCOVERY_DOC)
-    doc = docs_service.documents().get(documentId=document_id).execute()
-    doc_content = doc.get('body').get('content')
+
+    docs = []
+
+    for document_id in document_ids:
+        try:
+            doc = docs_service.documents().get(documentId=document_id).execute()
+            docs.append(doc)
+        except HttpError:
+            return {
+                "response": business_unit.panic_text if business_unit.panic_text else "The provided file is not in the "
+                                                                                      "public domain or the document ID "
+                                                                                      "is incorrect.",
+                "eval_result": 5,
+                "llm_context": None
+            }
+
+    doc_content = []
+    doc_title = ""
+    for doc in docs:
+        doc_content += doc.get('body').get('content')
+        doc_title += doc.get('title', '')
 
     drive = discovery.build("drive", "v3", http=http, discoveryServiceUrl=DISCOVERY_DRIVE)
 
-    last_modified = datetime.datetime.strptime(
-        drive.files().get(fileId=document_id, fields='*').execute()['modifiedTime'], '%Y-%m-%dT%H:%M:%S.%fZ')
+    last_modified = datetime.datetime.min
 
-    business_unit = BusinessUnit.objects.filter(apikey=documents_folder.split('documents-')[1]).first()
+    for document_id in document_ids:
+        modified_time = drive.files().get(fileId=document_id, fields='*').execute()['modifiedTime']
+        modified_datetime = datetime.datetime.strptime(modified_time, '%Y-%m-%dT%H:%M:%S.%fZ')
+
+        if modified_datetime > last_modified:
+            last_modified = modified_datetime
 
     if resave_documents:
         business_unit.last_update_document = None
@@ -154,7 +185,7 @@ def make_query(query_text, document_id, documents_folder, index_name, openai_key
         if os.path.exists(index_name):
             shutil.rmtree(index_name)
 
-    filename = os.path.join(documents_folder, doc['title'] + '.txt')
+    filename = os.path.join(documents_folder, doc_title + '.txt')
 
     if not os.path.exists(documents_folder) or not business_unit.last_update_document:
         try:
@@ -182,8 +213,12 @@ def make_query(query_text, document_id, documents_folder, index_name, openai_key
     else:
         llm = OpenAI(model=business_unit.gpt_model, temperature=temperature)
 
-    service_context = ServiceContext.from_defaults(llm=llm,
-                                                   system_prompt=business_unit.system_prompt)
+    service_context = ServiceContext.from_defaults(
+        llm=llm,
+        system_prompt=business_unit.system_prompt,
+        chunk_size=business_unit.chunk_size if business_unit.chunk_size else None,
+        chunk_overlap=business_unit.chunk_overlap if business_unit.chunk_overlap else None
+    )
     if os.path.exists(index_name):
         index = load_index_from_storage(
             StorageContext.from_defaults(persist_dir=index_name),
@@ -196,15 +231,15 @@ def make_query(query_text, document_id, documents_folder, index_name, openai_key
         )
         index.storage_context.persist(persist_dir=index_name)
 
-    query_engine = index.as_query_engine(similarity_top_k=1)
+    query_engine = index.as_query_engine(
+        similarity_top_k=business_unit.similarity_top_k if business_unit.similarity_top_k else 1
+    )
     response = query_engine.query(query_text)
 
     context = []
 
     for context_info in response.source_nodes:
         context.append(Document(text=context_info.node.get_content()).text)
-
-    context = f"{context[0]}"
 
     # eval_chat_template = ChatPromptTemplate(
     #     message_templates=[
@@ -373,3 +408,22 @@ def gpt_assistant_query(query_text, business_unit, openai_key):
                             "llm_context": "None, it's GPT assistant mode!"}
 
             break
+
+
+def split_text_into_parts(text, max_length=512):
+    final_parts = []
+    while text:
+        if len(text) <= max_length:
+            final_parts.append(text)
+            break
+
+        split_index = text[:max_length].rfind('.') + 1
+        if split_index <= 0:
+            split_index = text[:max_length].rfind(' ') + 1
+            if split_index <= 0:
+                split_index = max_length
+
+        final_parts.append(text[:split_index].strip())
+        text = text[split_index:].strip()
+
+    return final_parts

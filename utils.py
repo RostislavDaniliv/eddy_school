@@ -62,7 +62,7 @@ REFINE_PROMPT = (
 
 def get_credentials(file_url):
     credentials = ServiceAccountCredentials.from_json_keyfile_name(
-        '/Users/rostik/PycharmProjects/eddy_school/token.json', SCOPES
+        file_url, SCOPES
     )
     return credentials
 

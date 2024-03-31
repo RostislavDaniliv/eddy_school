@@ -2,6 +2,7 @@ import random
 import re
 import string
 
+from django.core.validators import MaxValueValidator, MinValueValidator
 from django.db import models
 
 
@@ -63,6 +64,13 @@ class BusinessUnit(models.Model):
     chunk_size = models.IntegerField(default=0, verbose_name="chunk size")
     chunk_overlap = models.IntegerField(default=0, verbose_name="chunk overlap")
     similarity_top_k = models.IntegerField(default=0, verbose_name="similarity top k")
+    similarity_simple_q = models.FloatField(default=0.79, verbose_name="similarity simple question",
+                                            help_text="Визначає ступінь подібності між заданим та збереженим "
+                                                      "питанням. Значення 0.96 для ідентичного питання, "
+                                                      "зміни в тексті зменшують подібність до 0.79-0.85. При сильному "
+                                                      "перефразуванні це 0.66",
+                                            validators=[MinValueValidator(0.50), MaxValueValidator(0.94)]
+                                            )
     chunk_splitter = models.CharField(max_length=10, null=True, blank=True, verbose_name='chunk splitter')
     bot_mode = models.PositiveIntegerField(choices=BOT_MODE, default=STRICT_MODE,
                                            verbose_name='bot mode')
@@ -108,3 +116,15 @@ class Document(models.Model):
 
     def __str__(self):
         return f"{self.name} - {self.document_id}"
+
+
+class SimpleQuestions(models.Model):
+    business_unit = models.ForeignKey(BusinessUnit, related_name='sqs', on_delete=models.CASCADE)
+    question = models.TextField()
+    answer = models.TextField()
+
+    def __str__(self):
+        return self.question
+
+    def get_questions(self):
+        return self.question.split('|')

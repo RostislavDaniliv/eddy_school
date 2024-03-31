@@ -22,6 +22,7 @@ from oauth2client.service_account import ServiceAccountCredentials
 
 from business_units.models import BusinessUnit
 from eddy_school.settings import SEND_PULSE_URL, SMART_SENDER_URL
+from pytorch_faq.utils import find_closest_answer
 
 SEND_PULSE_AUTH = '/oauth/access_token'
 
@@ -61,7 +62,7 @@ REFINE_PROMPT = (
 
 def get_credentials(file_url):
     credentials = ServiceAccountCredentials.from_json_keyfile_name(
-        file_url, SCOPES
+        '/Users/rostik/PycharmProjects/eddy_school/token.json', SCOPES
     )
     return credentials
 
@@ -135,6 +136,11 @@ def make_query(query_text, document_ids, documents_folder, index_name, openai_ke
     credentials = get_credentials(file_url)
     http = credentials.authorize(Http())
     business_unit = BusinessUnit.objects.filter(apikey=documents_folder.split('documents-')[1]).first()
+
+    closest_answer = find_closest_answer(business_unit.id, query_text, business_unit.similarity_simple_q)
+    if closest_answer:
+        return {"response": closest_answer, "eval_result": 5,
+                "llm_context": 'None'}
 
     if not business_unit.last_used_documents_list:
         resave_documents = True

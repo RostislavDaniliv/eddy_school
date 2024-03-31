@@ -17,6 +17,7 @@ class ChatHistoryAdmin(ExportMixin, admin.ModelAdmin):
         "username",
         "user_id",
         "user_question",
+        "system_answer",
         "created_at"
     )
     list_filter = (

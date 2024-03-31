@@ -1,7 +1,12 @@
 from django.contrib import admin
 
 from business_units.forms import BusinessGoogleCredsForm, DocumentForm
-from business_units.models import BusinessUnit, Document
+from business_units.models import BusinessUnit, Document, SimpleQuestions
+
+
+class SimpleQuestionsInline(admin.TabularInline):
+    model = SimpleQuestions
+    extra = 1
 
 
 @admin.register(Document)
@@ -17,6 +22,7 @@ class DocumentAdmin(admin.ModelAdmin):
 
 @admin.register(BusinessUnit)
 class BusinessUnitAdmin(admin.ModelAdmin):
+    inlines = [SimpleQuestionsInline]
     form = BusinessGoogleCredsForm
     list_display = (
         "id",

@@ -14,10 +14,9 @@ import openai
 import requests
 from googleapiclient.errors import HttpError
 from httplib2 import Http
-from llama_index import GPTVectorStoreIndex, ServiceContext, SimpleDirectoryReader, \
-    load_index_from_storage, StorageContext
-from llama_index.llms import OpenAI
-from llama_index.schema import Document
+from llama_index.core import ServiceContext, load_index_from_storage, StorageContext, SimpleDirectoryReader, \
+    GPTVectorStoreIndex, Document
+from llama_index.llms.openai import OpenAI
 from oauth2client.service_account import ServiceAccountCredentials
 
 from business_units.models import BusinessUnit

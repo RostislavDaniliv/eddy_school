@@ -61,24 +61,24 @@ def determine_response_text(business_unit, response_q):
     return translate_to_ukrainian(response_q['response'])
 
 
-def send_response(business_unit, text_parts, contact_id, source_type, response_text, llm_context):
+def send_response(business_unit, user_q, text_parts, contact_id, source_type, response_text, llm_context):
     if business_unit.sending_service == BusinessUnit.SEND_PULSE:
         sendpulse_response = [
             send_pulse_flow(request_type="send_message", business_units=business_unit, contact_id=contact_id,
                             part=part, source_type=source_type).content.decode('utf-8')
             for part in text_parts
         ]
-        return {"user_question": response_text, "response": response_text, "chunks": llm_context,
+        return {"user_question": user_q, "response": response_text, "chunks": llm_context,
                 "sendpulse_cont": sendpulse_response}
     else:
         r = smart_sender_flow(request_type="send_message", business_units=business_unit, contact_id=contact_id,
                               response=response_text)
-        return {"user_question": response_text, "response": response_text,
+        return {"user_question": user_q, "response": response_text,
                 "smart_sender": r.content.decode('utf-8')}
 
 
-def process_response(business_unit, response_q, contact_id, source_type):
+def process_response(business_unit, user_q, response_q, contact_id, source_type):
     response = determine_response_text(business_unit, response_q)
     text_parts = split_text_into_parts(response)
-    return send_response(business_unit, text_parts, contact_id, source_type, response_q['response'],
+    return send_response(business_unit, user_q, text_parts, contact_id, source_type, response_q['response'],
                          response_q['llm_context'])

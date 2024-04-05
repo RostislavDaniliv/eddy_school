@@ -37,19 +37,23 @@ def get_query_params(request):
 
 
 def generate_response(query_text, business_unit, document_id, llm_context):
-    if business_unit.script_mode == BusinessUnit.LLM_MODE:
-        resave_documents = True
-        if not document_id:
-            document_id = list(Document.objects.filter(business_unit=business_unit).values_list('document_id', flat=True))
-            resave_documents = False
-        return make_query(
-            query_text, document_id, f"./documents-{business_unit.apikey}",
-            f"./saved_index-{business_unit.apikey}", business_unit.gpt_api_key,
-            f"eddy_school/media/google_creds/{business_unit.google_creds.url.split('/')[3]}",
-            resave_documents
-        )
+    resave_documents = True
+    if not document_id:
+        document_records = Document.objects.filter(business_unit=business_unit)
+        google_docs_ids = list(document_records.exclude(document_id__isnull=True).values_list('document_id', flat=True))
+        uploaded_files = document_records.exclude(file__isnull=True)
+        resave_documents = False
     else:
-        return gpt_assistant_query(query_text, business_unit, business_unit.gpt_api_key)
+        google_docs_ids = [document_id]
+        uploaded_files = []
+
+    return make_query(
+        query_text, google_docs_ids, uploaded_files,
+        f"./documents-{business_unit.apikey}",
+        f"./saved_index-{business_unit.apikey}", business_unit.gpt_api_key,
+        f"eddy_school/media/google_creds/{business_unit.google_creds.url.split('/')[3]}",
+        resave_documents
+    )
 
 
 def determine_response_text(business_unit, response_q):

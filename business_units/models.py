@@ -111,7 +111,8 @@ class BusinessUnit(models.Model):
 
 class Document(models.Model):
     name = models.CharField(max_length=100, blank=True, null=True)
-    document_id = models.CharField(max_length=100, unique=True)
+    document_id = models.CharField(max_length=100, null=True, blank=True)
+    file = models.FileField(upload_to='documents/', blank=True, null=True)
     business_unit = models.ForeignKey(BusinessUnit, on_delete=models.SET_NULL, null=True, blank=True)
 
     def __str__(self):

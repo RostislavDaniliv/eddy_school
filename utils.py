@@ -9,6 +9,7 @@ import shutil
 import time
 from http.client import OK
 
+import docx
 import googleapiclient.discovery as discovery
 import openai
 import requests
@@ -18,6 +19,7 @@ from llama_index.core import ServiceContext, load_index_from_storage, StorageCon
     GPTVectorStoreIndex, Document
 from llama_index.llms.openai import OpenAI
 from oauth2client.service_account import ServiceAccountCredentials
+from pypdf import PdfReader
 
 from business_units.models import BusinessUnit
 from eddy_school.settings import SEND_PULSE_URL, SMART_SENDER_URL
@@ -129,7 +131,8 @@ def run_correctness_eval(
             return {"score": score}
 
 
-def make_query(query_text, document_ids, documents_folder, index_name, openai_key, file_url, resave_documents=False):
+def make_query(query_text, google_docs_ids, uploaded_files, documents_folder, index_name, openai_key, file_url,
+               resave_documents=False):
     openai.api_key = openai_key
     os.environ["OPENAI_API_KEY"] = openai.api_key
     credentials = get_credentials(file_url)
@@ -141,13 +144,35 @@ def make_query(query_text, document_ids, documents_folder, index_name, openai_ke
         return {"response": closest_answer, "eval_result": 5,
                 "llm_context": 'None'}
 
+    docs_content = ""
+    uploaded_files_ids = []
+
+    for document in uploaded_files:
+        uploaded_files_ids.append(document.id)
+        if str(document.file).endswith('.docx'):
+            doc = docx.Document(document.file.path)
+            for paragraph in doc.paragraphs:
+                docs_content += paragraph.text + "\n"
+        elif str(document.file).endswith('.pdf'):
+            with open(document.file.path, 'rb') as f:
+                reader = PdfReader(f)
+                for page in reader.pages:
+                    docs_content += page.extract_text() + "\n\n"
+        else:
+            with document.file.open('rb') as f:
+                docs_content += f.read().decode('utf-8') + "\n\n"
+
+    docs_list = google_docs_ids + uploaded_files_ids
+
     if not business_unit.last_used_documents_list:
         resave_documents = True
-        business_unit.last_used_documents_list = document_ids
+        business_unit.last_used_documents_list = docs_list
+        business_unit.last_update_document = datetime.datetime.now()
         business_unit.save()
-    elif document_ids != eval(business_unit.last_used_documents_list):
+    elif docs_list != eval(business_unit.last_used_documents_list):
         resave_documents = True
-        business_unit.last_used_documents_list = document_ids
+        business_unit.last_used_documents_list = docs_list
+        business_unit.last_update_document = datetime.datetime.now()
         business_unit.save()
 
     docs_service = discovery.build(
@@ -155,7 +180,7 @@ def make_query(query_text, document_ids, documents_folder, index_name, openai_ke
 
     docs = []
 
-    for document_id in document_ids:
+    for document_id in google_docs_ids:
         try:
             doc = docs_service.documents().get(documentId=document_id).execute()
             docs.append(doc)
@@ -168,17 +193,24 @@ def make_query(query_text, document_ids, documents_folder, index_name, openai_ke
                 "llm_context": None
             }
 
-    doc_content = []
     doc_title = ""
     for doc in docs:
-        doc_content += doc.get('body').get('content')
         doc_title += doc.get('title', '')
+
+    docs_service = discovery.build('docs', 'v1', http=http, discoveryServiceUrl=DISCOVERY_DOC)
+    for document_id in google_docs_ids:
+        try:
+            doc = docs_service.documents().get(documentId=document_id).execute()
+            docs_content += read_structural_elements(doc.get('body').get('content')) + "\n\n"
+        except HttpError as e:
+            return {"response": f"Failed to process Google Doc {document_id}: {str(e)}", "eval_result": 0,
+                    "llm_context": None}
 
     drive = discovery.build("drive", "v3", http=http, discoveryServiceUrl=DISCOVERY_DRIVE)
 
     last_modified = datetime.datetime.min
 
-    for document_id in document_ids:
+    for document_id in google_docs_ids:
         modified_time = drive.files().get(fileId=document_id, fields='*').execute()['modifiedTime']
         modified_datetime = datetime.datetime.strptime(modified_time, '%Y-%m-%dT%H:%M:%S.%fZ')
 
@@ -213,8 +245,8 @@ def make_query(query_text, document_ids, documents_folder, index_name, openai_ke
         os.mkdir(documents_folder)
         business_unit.last_update_document = last_modified
         business_unit.save()
-    with io.open(filename, 'wb') as f:
-        f.write(read_structural_elements(doc_content).encode('utf-8'))
+    with io.open(filename, 'w') as f:
+        f.write(docs_content)
         temperature = business_unit.temperature
     if business_unit.max_tokens:
         llm = OpenAI(model=business_unit.gpt_model, temperature=temperature,
@@ -249,20 +281,6 @@ def make_query(query_text, document_ids, documents_folder, index_name, openai_ke
 
     for context_info in response.source_nodes:
         context.append(Document(text=context_info.node.get_content()).text)
-
-    # eval_chat_template = ChatPromptTemplate(
-    #     message_templates=[
-    #         ChatMessage(role=MessageRole.SYSTEM, content=business_unit.eval_prompt),
-    #         ChatMessage(role=MessageRole.USER, content=REFINE_PROMPT),
-    #     ]
-    # )
-    # llm = OpenAI(model=business_unit.gpt_model)
-
-    # eval_result = run_correctness_eval(
-    #     query_str=query_text, reference_answer=context, generated_answer=response.response,
-    #     eval_chat_template=eval_chat_template, llm=llm, threshold=4.0
-    # )
-
     return {"response": response.response, "eval_result": 5,
             "llm_context": context}
 

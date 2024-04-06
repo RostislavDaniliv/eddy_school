@@ -144,6 +144,7 @@ def make_query(query_text, google_docs_ids, uploaded_files, documents_folder, in
         return {"response": closest_answer, "eval_result": 5,
                 "llm_context": 'None'}
 
+    f_doc_title = f'{business_unit.apikey}'
     docs_content = ""
     uploaded_files_ids = []
 
@@ -197,6 +198,8 @@ def make_query(query_text, google_docs_ids, uploaded_files, documents_folder, in
     for doc in docs:
         doc_title += doc.get('title', '')
 
+    doc_title = f_doc_title + ' ' + doc_title
+
     docs_service = discovery.build('docs', 'v1', http=http, discoveryServiceUrl=DISCOVERY_DOC)
     for document_id in google_docs_ids:
         try:
@@ -233,7 +236,10 @@ def make_query(query_text, google_docs_ids, uploaded_files, documents_folder, in
             os.mkdir(documents_folder)
         except:
             pass
-        business_unit.last_update_document = last_modified
+        if google_docs_ids:
+            business_unit.last_update_document = last_modified
+        else:
+            business_unit.last_update_document = datetime.datetime.now()
         business_unit.save()
     elif business_unit.last_update_document.strftime('%Y-%m-%dT%H:%M:%S.%fZ') < last_modified.strftime(
             '%Y-%m-%dT%H:%M:%S.%fZ'):

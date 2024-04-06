@@ -160,8 +160,11 @@ def make_query(query_text, google_docs_ids, uploaded_files, documents_folder, in
                 for page in reader.pages:
                     docs_content += page.extract_text() + "\n\n"
         else:
-            with document.file.open('rb') as f:
-                docs_content += f.read().decode('utf-8') + "\n\n"
+            try:
+                with document.file.open('rb') as f:
+                    docs_content += f.read().decode('utf-8') + "\n\n"
+            except:
+                pass
 
     docs_list = google_docs_ids + uploaded_files_ids
 

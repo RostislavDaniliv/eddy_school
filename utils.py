@@ -5,22 +5,26 @@ import datetime
 import io
 import json
 import os
-import shutil
 import time
 from http.client import OK
 
 import docx
-import googleapiclient.discovery as discovery
 import openai
+import pytz
 import requests
+from googleapiclient.discovery import build as google_build
 from googleapiclient.errors import HttpError
 from httplib2 import Http
-from llama_index.core import ServiceContext, load_index_from_storage, StorageContext, SimpleDirectoryReader, \
-    GPTVectorStoreIndex, Document
+from llama_index.core import ServiceContext, SimpleDirectoryReader, \
+    Document, Settings
+from llama_index.core import VectorStoreIndex, StorageContext
+from llama_index.embeddings.openai import OpenAIEmbedding
 from llama_index.llms.openai import OpenAI
+from llama_index.vector_stores.weaviate import WeaviateVectorStore
 from oauth2client.service_account import ServiceAccountCredentials
 from pypdf import PdfReader
 
+import weaviate
 from business_units.models import BusinessUnit
 from eddy_school.settings import SEND_PULSE_URL, SMART_SENDER_URL
 from pytorch_faq.utils import find_closest_answer
@@ -141,122 +145,94 @@ def make_query(query_text, google_docs_ids, uploaded_files, documents_folder, in
 
     closest_answer = find_closest_answer(business_unit.id, query_text, business_unit.similarity_simple_q)
     if closest_answer:
-        return {"response": closest_answer, "eval_result": 5,
-                "llm_context": 'None'}
+        return {"response": closest_answer, "eval_result": 5, "llm_context": 'None'}
+
+    if business_unit.max_tokens:
+        llm = OpenAI(model=business_unit.gpt_model, temperature=business_unit.temperature,
+                     max_tokens=business_unit.max_tokens)
+    else:
+        llm = OpenAI(model=business_unit.gpt_model, temperature=business_unit.temperature)
+
+    Settings.llm = llm
+    Settings.embed_model = OpenAIEmbedding(model='text-embedding-3-large')
 
     f_doc_title = f'{business_unit.apikey}'
     docs_content = ""
-    uploaded_files_ids = []
-
-    for document in uploaded_files:
-        uploaded_files_ids.append(document.id)
-        if str(document.file).endswith('.docx'):
-            doc = docx.Document(document.file.path)
-            for paragraph in doc.paragraphs:
-                docs_content += paragraph.text + "\n"
-        elif str(document.file).endswith('.pdf'):
-            with open(document.file.path, 'rb') as f:
-                reader = PdfReader(f)
-                for page in reader.pages:
-                    docs_content += page.extract_text() + "\n\n"
-        else:
-            try:
-                with document.file.open('rb') as f:
-                    docs_content += f.read().decode('utf-8') + "\n\n"
-            except:
-                pass
+    uploaded_files_ids = [document.id for document in uploaded_files]
 
     docs_list = google_docs_ids + uploaded_files_ids
+    documents_changed = False
+
+    if not os.path.exists(index_name):
+        documents_changed = True
 
     if not business_unit.last_used_documents_list:
-        resave_documents = True
+        documents_changed = True
         business_unit.last_used_documents_list = docs_list
-        business_unit.last_update_document = datetime.datetime.now()
         business_unit.save()
-    elif docs_list != eval(business_unit.last_used_documents_list):
-        resave_documents = True
+    elif business_unit.last_used_documents_list is None or docs_list != eval(business_unit.last_used_documents_list):
+        documents_changed = True
         business_unit.last_used_documents_list = docs_list
-        business_unit.last_update_document = datetime.datetime.now()
         business_unit.save()
 
-    docs_service = discovery.build(
-        'docs', 'v1', http=http, discoveryServiceUrl=DISCOVERY_DOC)
+    drive = google_build("drive", "v3", http=http)
 
-    docs = []
+    ukraine_timezone = pytz.timezone('Europe/Kiev')
 
-    for document_id in google_docs_ids:
-        try:
-            doc = docs_service.documents().get(documentId=document_id).execute()
-            docs.append(doc)
-        except HttpError:
-            return {
-                "response": business_unit.panic_text if business_unit.panic_text else "The provided file is not in the "
-                                                                                      "public domain or the document ID "
-                                                                                      "is incorrect.",
-                "eval_result": 5,
-                "llm_context": None
-            }
-
-    doc_title = ""
-    for doc in docs:
-        doc_title += doc.get('title', '')
-
-    doc_title = f_doc_title + ' ' + doc_title
-
-    docs_service = discovery.build('docs', 'v1', http=http, discoveryServiceUrl=DISCOVERY_DOC)
-    for document_id in google_docs_ids:
-        try:
-            doc = docs_service.documents().get(documentId=document_id).execute()
-            docs_content += read_structural_elements(doc.get('body').get('content')) + "\n\n"
-        except HttpError as e:
-            return {"response": f"Failed to process Google Doc {document_id}: {str(e)}", "eval_result": 0,
-                    "llm_context": None}
-
-    drive = discovery.build("drive", "v3", http=http, discoveryServiceUrl=DISCOVERY_DRIVE)
-
-    last_modified = datetime.datetime.min
+    last_modified = business_unit.last_update_document.astimezone(
+        ukraine_timezone) if business_unit.last_update_document else datetime.datetime.min.replace(
+        tzinfo=pytz.utc).astimezone(ukraine_timezone)
 
     for document_id in google_docs_ids:
-        modified_time = drive.files().get(fileId=document_id, fields='*').execute()['modifiedTime']
-        modified_datetime = datetime.datetime.strptime(modified_time, '%Y-%m-%dT%H:%M:%S.%fZ')
-
+        modified_time = drive.files().get(fileId=document_id, fields='modifiedTime').execute()['modifiedTime']
+        modified_datetime = datetime.datetime.strptime(modified_time, '%Y-%m-%dT%H:%M:%S.%fZ').replace(
+            tzinfo=pytz.utc).astimezone(ukraine_timezone)
         if modified_datetime > last_modified:
             last_modified = modified_datetime
+            business_unit.last_update_document = modified_datetime.astimezone(pytz.utc)
+            business_unit.save()
 
-    if resave_documents:
-        business_unit.last_update_document = None
-        business_unit.save()
+    if documents_changed:
+        docs_service = google_build('docs', 'v1', http=http)
+        docs = []
 
-        if os.path.exists(documents_folder):
-            shutil.rmtree(documents_folder)
-        if os.path.exists(index_name):
-            shutil.rmtree(index_name)
+        for document_id in google_docs_ids:
+            try:
+                doc = docs_service.documents().get(documentId=document_id).execute()
+                docs_content += read_structural_elements(doc.get('body').get('content')) + "\n\n"
+                docs.append(doc)
+            except HttpError as e:
+                return {"response": f"Failed to process Google Doc {document_id}: {str(e)}", "eval_result": 0,
+                        "llm_context": None}
 
-    filename = os.path.join(documents_folder, doc_title + '.txt')
+        for document in uploaded_files:
+            if str(document.file).endswith('.docx'):
+                doc = docx.Document(document.file.path)
+                for paragraph in doc.paragraphs:
+                    docs_content += paragraph.text + "\n"
+            elif str(document.file).endswith('.pdf'):
+                with open(document.file.path, 'rb') as f:
+                    reader = PdfReader(f)
+                    for page in reader.pages:
+                        docs_content += page.extract_text() + "\n\n"
+            else:
+                try:
+                    with document.file.open('rb') as f:
+                        docs_content += f.read().decode('utf-8') + "\n\n"
+                except:
+                    pass
 
-    if not os.path.exists(documents_folder) or not business_unit.last_update_document:
-        try:
-            os.mkdir(documents_folder)
-        except:
-            pass
-        if google_docs_ids:
-            business_unit.last_update_document = last_modified
-        else:
-            business_unit.last_update_document = datetime.datetime.now()
-        business_unit.save()
-    elif business_unit.last_update_document.strftime('%Y-%m-%dT%H:%M:%S.%fZ') < last_modified.strftime(
-            '%Y-%m-%dT%H:%M:%S.%fZ'):
-        if os.path.exists(documents_folder):
-            shutil.rmtree(documents_folder)
-        if os.path.exists(index_name):
-            shutil.rmtree(index_name)
+        filename = os.path.join(documents_folder, f_doc_title + '.txt')
+        if not os.path.exists(documents_folder):
+            os.makedirs(documents_folder, exist_ok=True)
 
-        os.mkdir(documents_folder)
+        with io.open(filename, 'w', encoding='utf-8') as f:
+            f.write(docs_content)
+
         business_unit.last_update_document = last_modified
         business_unit.save()
-    with io.open(filename, 'w') as f:
-        f.write(docs_content)
-        temperature = business_unit.temperature
+
+    temperature = business_unit.temperature
     if business_unit.max_tokens:
         llm = OpenAI(model=business_unit.gpt_model, temperature=temperature,
                      max_tokens=business_unit.max_tokens)
@@ -269,17 +245,29 @@ def make_query(query_text, google_docs_ids, uploaded_files, documents_folder, in
         chunk_size=business_unit.chunk_size if business_unit.chunk_size else None,
         chunk_overlap=business_unit.chunk_overlap if business_unit.chunk_overlap else None
     )
+
+    documents = SimpleDirectoryReader(documents_folder).load_data()
+    # auth_config = weaviate.AuthApiKey(api_key="f7myJDmYyg7q2CMTJN1vnQf1D3LaAE7d1ETj")
+    client = weaviate.Client(
+        url="http://sc.aiadmin.info:8080/",
+        # auth_client_secret=auth_config
+    )
+
+    vector_store = WeaviateVectorStore(
+        weaviate_client=client,
+        index_name=f"Bu{business_unit.id}", text_key='content',
+    )
+
+    storage_context = StorageContext.from_defaults(vector_store=vector_store)
     if os.path.exists(index_name):
-        index = load_index_from_storage(
-            StorageContext.from_defaults(persist_dir=index_name),
-            service_context=service_context,
-        )
+        index = VectorStoreIndex.from_vector_store(vector_store, embed_model=Settings.embed_model,
+                                                   service_context=service_context)
     else:
-        documents = SimpleDirectoryReader(documents_folder).load_data()
-        index = GPTVectorStoreIndex.from_documents(
-            documents, service_context=service_context
-        )
-        index.storage_context.persist(persist_dir=index_name)
+        os.mkdir(index_name)
+        index = VectorStoreIndex.from_documents(documents,
+                                                storage_context=storage_context,
+                                                show_progress=True
+                                                )
 
     query_engine = index.as_query_engine(
         similarity_top_k=business_unit.similarity_top_k if business_unit.similarity_top_k else 1

@@ -166,11 +166,11 @@ def make_query(query_text, google_docs_ids, uploaded_files, documents_folder, in
     if not os.path.exists(index_name):
         documents_changed = True
 
-    if not business_unit.last_used_documents_list:
+    if not business_unit.last_used_documents_list or business_unit.last_used_documents_list == '[]':
         documents_changed = True
         business_unit.last_used_documents_list = docs_list
         business_unit.save()
-    elif business_unit.last_used_documents_list is None or docs_list != eval(business_unit.last_used_documents_list):
+    elif business_unit.last_used_documents_list is [] or docs_list != eval(business_unit.last_used_documents_list):
         documents_changed = True
         business_unit.last_used_documents_list = docs_list
         business_unit.save()
@@ -189,6 +189,7 @@ def make_query(query_text, google_docs_ids, uploaded_files, documents_folder, in
             tzinfo=pytz.utc).astimezone(ukraine_timezone)
         if modified_datetime > last_modified:
             last_modified = modified_datetime
+            documents_changed = True
             business_unit.last_update_document = modified_datetime.astimezone(pytz.utc)
             business_unit.save()
 
@@ -259,7 +260,12 @@ def make_query(query_text, google_docs_ids, uploaded_files, documents_folder, in
     )
 
     storage_context = StorageContext.from_defaults(vector_store=vector_store)
-    if os.path.exists(index_name):
+    if os.path.exists(index_name) and documents_changed:
+        index = VectorStoreIndex.from_documents(documents,
+                                                storage_context=storage_context,
+                                                show_progress=True
+                                                )
+    elif os.path.exists(index_name):
         index = VectorStoreIndex.from_vector_store(vector_store, embed_model=Settings.embed_model,
                                                    service_context=service_context)
     else:

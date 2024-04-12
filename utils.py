@@ -136,7 +136,7 @@ def run_correctness_eval(
 
 
 def make_query(query_text, google_docs_ids, uploaded_files, documents_folder, index_name, openai_key, file_url,
-               resave_documents=False):
+               test_doc=False):
     openai.api_key = openai_key
     os.environ["OPENAI_API_KEY"] = openai.api_key
     credentials = get_credentials(file_url)
@@ -193,7 +193,7 @@ def make_query(query_text, google_docs_ids, uploaded_files, documents_folder, in
             business_unit.last_update_document = modified_datetime.astimezone(pytz.utc)
             business_unit.save()
 
-    if documents_changed:
+    if documents_changed or test_doc:
         docs_service = google_build('docs', 'v1', http=http)
         docs = []
 
@@ -260,7 +260,7 @@ def make_query(query_text, google_docs_ids, uploaded_files, documents_folder, in
     )
 
     storage_context = StorageContext.from_defaults(vector_store=vector_store)
-    if os.path.exists(index_name) and documents_changed:
+    if os.path.exists(index_name) and documents_changed or test_doc:
         index = VectorStoreIndex.from_documents(documents,
                                                 storage_context=storage_context,
                                                 show_progress=True

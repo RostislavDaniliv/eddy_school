@@ -184,7 +184,13 @@ def make_query(query_text, google_docs_ids, uploaded_files, documents_folder, in
         tzinfo=pytz.utc).astimezone(ukraine_timezone)
 
     for document_id in google_docs_ids:
-        modified_time = drive.files().get(fileId=document_id, fields='modifiedTime').execute()['modifiedTime']
+        try:
+            modified_time = drive.files().get(fileId=document_id, fields='modifiedTime').execute()['modifiedTime']
+        except HttpError as e:
+            return {
+                "response": f"{business_unit.panic_text if business_unit.panic_text else 'Oops. The document was not found or cannot be accessed.'}",
+                "eval_result": 0,
+                "llm_context": None}
         modified_datetime = datetime.datetime.strptime(modified_time, '%Y-%m-%dT%H:%M:%S.%fZ').replace(
             tzinfo=pytz.utc).astimezone(ukraine_timezone)
         if modified_datetime > last_modified:

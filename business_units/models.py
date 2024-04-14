@@ -129,3 +129,9 @@ class SimpleQuestions(models.Model):
 
     def get_questions(self):
         return self.question.split('|')
+
+
+class TestUser(models.Model):
+    contact_id = models.CharField(max_length=200)
+    file_hash_sum = models.CharField(max_length=500, null=True, blank=True)
+

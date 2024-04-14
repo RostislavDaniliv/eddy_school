@@ -5,7 +5,7 @@ from django.http import HttpResponse
 from business_units.models import BusinessUnit, Document
 from utils import (
     make_query, translate_to_ukrainian, send_pulse_flow,
-    gpt_assistant_query, smart_sender_flow, split_text_into_parts
+    smart_sender_flow, split_text_into_parts
 )
 
 
@@ -36,7 +36,7 @@ def get_query_params(request):
     return params
 
 
-def generate_response(query_text, business_unit, document_id, llm_context):
+def generate_response(query_text, business_unit, document_id, llm_context, contact_id):
     test_doc = False
     if not document_id:
         document_records = Document.objects.filter(business_unit=business_unit)
@@ -52,15 +52,12 @@ def generate_response(query_text, business_unit, document_id, llm_context):
         f"./documents-{business_unit.apikey}",
         f"./saved_index-{business_unit.apikey}", business_unit.gpt_api_key,
         f"eddy_school/media/google_creds/{business_unit.google_creds.url.split('/')[3]}",
-        test_doc=test_doc
+        test_doc=test_doc, contact_id=contact_id
     )
 
 
 def determine_response_text(business_unit, response_q):
-    if business_unit.bot_mode == BusinessUnit.STRICT_MODE:
-        return business_unit.default_text if float(response_q['eval_result']) < business_unit.eval_score \
-            else translate_to_ukrainian(response_q['response'])
-    elif response_q['response'].startswith("I'm sorry"):
+    if response_q['response'].startswith("I'm sorry"):
         return business_unit.default_text
     return translate_to_ukrainian(response_q['response'])
 

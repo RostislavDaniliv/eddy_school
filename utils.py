@@ -25,7 +25,7 @@ from oauth2client.service_account import ServiceAccountCredentials
 from pypdf import PdfReader
 
 import weaviate
-from business_units.models import BusinessUnit
+from business_units.models import BusinessUnit, TestUser
 from eddy_school.settings import SEND_PULSE_URL, SMART_SENDER_URL
 from pytorch_faq.utils import find_closest_answer
 
@@ -136,12 +136,15 @@ def run_correctness_eval(
 
 
 def make_query(query_text, google_docs_ids, uploaded_files, documents_folder, index_name, openai_key, file_url,
-               test_doc=False):
+               test_doc=False, contact_id=None):
     openai.api_key = openai_key
     os.environ["OPENAI_API_KEY"] = openai.api_key
     credentials = get_credentials(file_url)
     http = credentials.authorize(Http())
     business_unit = BusinessUnit.objects.filter(apikey=documents_folder.split('documents-')[1]).first()
+
+    if test_doc:
+        test_user, _ = TestUser.objects.get_or_create(contact_id=contact_id)
 
     closest_answer = find_closest_answer(business_unit.id, query_text, business_unit.similarity_simple_q)
     if closest_answer:
@@ -255,31 +258,52 @@ def make_query(query_text, google_docs_ids, uploaded_files, documents_folder, in
 
     documents = SimpleDirectoryReader(documents_folder).load_data()
     # auth_config = weaviate.AuthApiKey(api_key="f7myJDmYyg7q2CMTJN1vnQf1D3LaAE7d1ETj")
+
     client = weaviate.Client(
         url="http://sc.aiadmin.info:8080/",
         # auth_client_secret=auth_config
     )
 
-    vector_store = WeaviateVectorStore(
-        weaviate_client=client,
-        index_name=f"Bu{business_unit.id}", text_key='content',
-    )
+    exists_test_index = False
+
+    if test_doc:
+        if test_user.file_hash_sum != documents[0].hash:
+            test_user.file_hash_sum = documents[0].hash
+            test_user.save()
+
+            try:
+                client.schema.delete_class(f'TestUser{contact_id}')
+                print(f"Class TestUser{contact_id} has been deleted successfully.")
+            except Exception as e:
+                print(f"Failed to delete class TestUser{contact_id}: {str(e)}")
+        else:
+            exists_test_index = True
+
+        vector_store = WeaviateVectorStore(
+            weaviate_client=client,
+            index_name=f"TestUser{contact_id}", text_key='content',
+        )
+    else:
+        vector_store = WeaviateVectorStore(
+            weaviate_client=client,
+            index_name=f"Bu{business_unit.id}", text_key='content',
+        )
 
     storage_context = StorageContext.from_defaults(vector_store=vector_store)
-    if os.path.exists(index_name) and documents_changed or test_doc:
-        index = VectorStoreIndex.from_documents(documents,
-                                                storage_context=storage_context,
-                                                show_progress=True
-                                                )
-    elif os.path.exists(index_name):
+    if os.path.exists(index_name) and documents_changed or (test_doc and not exists_test_index):
+        VectorStoreIndex.from_documents(documents,
+                                        storage_context=storage_context,
+                                        show_progress=True
+                                        )
+    if not os.path.exists(index_name) and not test_doc:
+        os.mkdir(index_name)
+        VectorStoreIndex.from_documents(documents,
+                                        storage_context=storage_context,
+                                        show_progress=True
+                                        )
+    if os.path.exists(index_name) or exists_test_index:
         index = VectorStoreIndex.from_vector_store(vector_store, embed_model=Settings.embed_model,
                                                    service_context=service_context)
-    else:
-        os.mkdir(index_name)
-        index = VectorStoreIndex.from_documents(documents,
-                                                storage_context=storage_context,
-                                                show_progress=True
-                                                )
 
     query_engine = index.as_query_engine(
         similarity_top_k=business_unit.similarity_top_k if business_unit.similarity_top_k else 1

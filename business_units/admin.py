@@ -6,7 +6,7 @@ from django.urls import path, reverse
 from django.utils.html import format_html
 
 from business_units.forms import BusinessGoogleCredsForm, DocumentForm, CsvImportForm, SimpleQuestionsForm
-from business_units.models import BusinessUnit, Document, SimpleQuestions
+from business_units.models import BusinessUnit, Document, SimpleQuestions, TestUser
 
 
 @admin.register(SimpleQuestions)
@@ -86,6 +86,9 @@ class BusinessUnitAdmin(admin.ModelAdmin):
         form = CsvImportForm()
         payload = {"form": form, "title": "Import questions"}
         return render(request, "admin/csv_form.html", payload)
+
+
+admin.site.register(TestUser)
 
 
 admin.site.register(BusinessUnit, BusinessUnitAdmin)

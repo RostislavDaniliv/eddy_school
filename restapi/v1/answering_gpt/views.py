@@ -38,7 +38,9 @@ class GPTAnswerView(APIView):
         response_q = generate_response(query_text=query_params['query_text'],
                                        business_unit=business_unit,
                                        document_id=query_params['document_id'],
-                                       llm_context=query_params['llm_context'])
+                                       llm_context=query_params['llm_context'],
+                                       contact_id=query_params['contact_id']
+                                       )
         final_response = process_response(business_unit=business_unit,
                                           user_q=query_params['query_text'],
                                           response_q=response_q,

@@ -287,6 +287,13 @@ def make_query(query_text, google_docs_ids, uploaded_files, documents_folder, in
 
     exists_test_index = False
 
+    if documents_changed and not test_doc:
+        try:
+            client.schema.delete_class(f'Bu{business_unit.id}')
+            print(f"Class TestUser{contact_id} has been deleted successfully.")
+        except Exception as e:
+            print(f"Failed to delete class Bu{business_unit.id}: {str(e)}")
+
     if test_doc:
         test_user.file_size = documents[0].extra_info['file_size']
         if test_user.file_hash_sum != documents[0].hash:

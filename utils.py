@@ -8,6 +8,9 @@ import os
 import time
 from http.client import OK
 
+import tiktoken
+from llama_index.core.callbacks import CallbackManager, TokenCountingHandler
+
 import docx
 import openai
 import pytz
@@ -143,8 +146,19 @@ def make_query(query_text, google_docs_ids, uploaded_files, documents_folder, in
     http = credentials.authorize(Http())
     business_unit = BusinessUnit.objects.filter(apikey=documents_folder.split('documents-')[1]).first()
 
+    token_counter = TokenCountingHandler(
+        tokenizer=tiktoken.encoding_for_model(business_unit.gpt_model).encode
+    )
+
+    Settings.callback_manager = CallbackManager([token_counter])
+
     if test_doc:
         test_user, _ = TestUser.objects.get_or_create(contact_id=contact_id)
+
+        if test_user and business_unit.is_trial_user_limits:
+            if (test_user.request_count >= business_unit.requests_count_limit
+                    or test_user.token_used >= business_unit.token_used):
+                return {"response": business_unit.usage_limit_message, "eval_result": 5, "llm_context": 'None'}
 
     closest_answer = find_closest_answer(business_unit.id, query_text, business_unit.similarity_simple_q)
     if closest_answer:
@@ -249,15 +263,22 @@ def make_query(query_text, google_docs_ids, uploaded_files, documents_folder, in
     else:
         llm = OpenAI(model=business_unit.gpt_model, temperature=temperature)
 
+    from restapi.v1.answering_gpt.utils import last_five_chats
+    system_prompt = business_unit.system_prompt
+
     service_context = ServiceContext.from_defaults(
         llm=llm,
-        system_prompt=business_unit.system_prompt,
+        system_prompt=system_prompt,
         chunk_size=business_unit.chunk_size if business_unit.chunk_size else None,
         chunk_overlap=business_unit.chunk_overlap if business_unit.chunk_overlap else None
     )
 
     documents = SimpleDirectoryReader(documents_folder).load_data()
     # auth_config = weaviate.AuthApiKey(api_key="f7myJDmYyg7q2CMTJN1vnQf1D3LaAE7d1ETj")
+
+    if test_doc and business_unit.is_trial_user_limits:
+        if documents[0].extra_info['file_size'] > business_unit.file_size_limit:
+            return {"response": business_unit.usage_limit_message, "eval_result": 5, "llm_context": 'None'}
 
     client = weaviate.Client(
         url="http://sc.aiadmin.info:8080/",
@@ -267,9 +288,9 @@ def make_query(query_text, google_docs_ids, uploaded_files, documents_folder, in
     exists_test_index = False
 
     if test_doc:
+        test_user.file_size = documents[0].extra_info['file_size']
         if test_user.file_hash_sum != documents[0].hash:
             test_user.file_hash_sum = documents[0].hash
-            test_user.save()
 
             try:
                 client.schema.delete_class(f'TestUser{contact_id}')
@@ -278,6 +299,7 @@ def make_query(query_text, google_docs_ids, uploaded_files, documents_folder, in
                 print(f"Failed to delete class TestUser{contact_id}: {str(e)}")
         else:
             exists_test_index = True
+        test_user.save()
 
         vector_store = WeaviateVectorStore(
             weaviate_client=client,
@@ -308,7 +330,20 @@ def make_query(query_text, google_docs_ids, uploaded_files, documents_folder, in
     query_engine = index.as_query_engine(
         similarity_top_k=business_unit.similarity_top_k if business_unit.similarity_top_k else 1
     )
+
+    query_text = f"""
+        New user question:
+            {query_text}
+        
+        System prompt:
+            {last_five_chats(contact_id)}
+    """
     response = query_engine.query(query_text)
+
+    if test_doc:
+        test_user.token_used += token_counter.total_llm_token_count
+        test_user.request_count += 1
+        test_user.save()
 
     context = []
 

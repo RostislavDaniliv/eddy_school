@@ -49,7 +49,7 @@ class GPTAnswerView(APIView):
         create_chat_history(
             business_unit=business_unit,
             username=request.data.get('username'),
-            user_id=request.data.get('user_id'),
+            user_id=query_params['contact_id'],
             user_question=query_params['query_text'],
             system_answer=response_q['response']
         )

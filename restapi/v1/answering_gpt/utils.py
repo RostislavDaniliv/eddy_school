@@ -3,6 +3,7 @@ import datetime
 from django.http import HttpResponse
 
 from business_units.models import BusinessUnit, Document
+from chat_history.models import ChatHistory
 from utils import (
     make_query, translate_to_ukrainian, send_pulse_flow,
     smart_sender_flow, split_text_into_parts
@@ -83,3 +84,23 @@ def process_response(business_unit, user_q, response_q, contact_id, source_type)
     text_parts = split_text_into_parts(response)
     return send_response(business_unit, user_q, text_parts, contact_id, source_type, response_q['response'],
                          response_q['llm_context'])
+
+
+def last_five_chats(contact_id):
+    last_chats = ChatHistory.objects.filter(user_id=contact_id).order_by('-created_at')[:3]
+
+    formatted_text = (
+        "\nIt is also important for you to communicate based on previous questions/answers. "
+        "I have provided them below (this is very important for the integrity of the discussion):")
+
+    for index, chat in enumerate(last_chats, start=1):
+        formatted_text += f"""
+        Previous Message {index}
+        User question:
+        {chat.user_question}
+        Your answer:
+        {chat.system_answer}
+
+        """
+
+    return formatted_text

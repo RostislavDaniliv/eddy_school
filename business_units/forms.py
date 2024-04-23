@@ -7,6 +7,9 @@ class BusinessGoogleCredsForm(forms.ModelForm):
     class Meta:
         model = BusinessUnit
         fields = '__all__'
+        widgets = {
+            'is_trial_user_limits': forms.CheckboxInput(attrs={'onchange': 'toggleTrialLimitFields();'}),
+        }
 
 
 class DocumentForm(forms.ModelForm):

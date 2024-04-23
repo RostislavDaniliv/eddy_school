@@ -88,7 +88,21 @@ class BusinessUnitAdmin(admin.ModelAdmin):
         return render(request, "admin/csv_form.html", payload)
 
 
-admin.site.register(TestUser)
+class TestUserAdmin(admin.ModelAdmin):
+    list_display = (
+        "id",
+        "contact_id",
+        "request_count",
+        "file_size",
+        "token_used",
+        'created_at',
+    )
+    readonly_fields = (
+        'created_at',
+    )
+
+
+admin.site.register(TestUser, TestUserAdmin)
 
 
 admin.site.register(BusinessUnit, BusinessUnitAdmin)

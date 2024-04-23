@@ -85,6 +85,24 @@ class BusinessUnit(models.Model):
                                                       "перефразуванні це 0.66",
                                             validators=[MinValueValidator(0.50), MaxValueValidator(0.94)]
                                             )
+    is_trial_user_limits = models.BooleanField(
+        default=False, verbose_name="Limits for trial users",
+        help_text="Активуйте, щоб застосувати обмеження використання для тестових користувачів цього модуля."
+    )
+    requests_count_limit = models.IntegerField(
+        default=0, verbose_name="Максимальна кількість запитів для тестового користувача"
+    )
+    file_size_limit = models.IntegerField(
+        default=0, verbose_name="Максимальний розмір файлу для тестового користувача"
+    )
+    token_used = models.IntegerField(
+        default=0, verbose_name="Максимальна кількість токенів для тестового користувача"
+    )
+    usage_limit_message = models.CharField(
+        max_length=500,
+        default="Ви перевищили встановлений ліміт використання наших ресурсів. Будь ласка, зверніться до нашої служби"
+                " підтримки для отримання додаткової інформації.", verbose_name="usage limit message"
+    )
 
     def __str__(self):
         return f"{self.name} - {self.apikey}"
@@ -134,4 +152,7 @@ class SimpleQuestions(models.Model):
 class TestUser(models.Model):
     contact_id = models.CharField(max_length=200)
     file_hash_sum = models.CharField(max_length=500, null=True, blank=True)
-
+    request_count = models.IntegerField(null=False, blank=False, default=0)
+    file_size = models.FloatField(null=False, blank=False, default=0)
+    token_used = models.IntegerField(null=False, blank=False, default=0)
+    created_at = models.DateTimeField(auto_now_add=True, verbose_name="created at")

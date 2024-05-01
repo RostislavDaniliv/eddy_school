@@ -50,6 +50,7 @@ class BusinessUnitAdmin(admin.ModelAdmin):
     readonly_fields = (
         'apikey', 'sendpulse_token', 'last_update_sendpulse', 'last_update_document', 'last_used_documents_list'
     )
+    exclude = ('eval_prompt', 'chunk_splitter', 'eval_score', )
 
     def import_questions_button(self, obj):
         return format_html('<a class="button" href="{}">Import Questions</a>',

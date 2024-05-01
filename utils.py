@@ -28,6 +28,7 @@ from oauth2client.service_account import ServiceAccountCredentials
 from pypdf import PdfReader
 
 import weaviate
+from business_units import models
 from business_units.models import BusinessUnit, TestUser
 from eddy_school.settings import SEND_PULSE_URL, SMART_SENDER_URL
 from pytorch_faq.utils import find_closest_answer
@@ -145,6 +146,14 @@ def make_query(query_text, google_docs_ids, uploaded_files, documents_folder, in
     credentials = get_credentials(file_url)
     http = credentials.authorize(Http())
     business_unit = BusinessUnit.objects.filter(apikey=documents_folder.split('documents-')[1]).first()
+
+    if not test_doc:
+        doc_ids = ''
+        for doc__id in list(models.Document.objects.filter(business_unit=business_unit).values_list(
+                'document_id', flat=True)):
+            doc_ids += f"{doc__id}\n"
+        business_unit.documents_list = doc_ids
+        business_unit.save()
 
     token_counter = TokenCountingHandler(
         tokenizer=tiktoken.encoding_for_model(business_unit.gpt_model).encode

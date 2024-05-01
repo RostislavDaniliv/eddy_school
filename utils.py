@@ -149,9 +149,9 @@ def make_query(query_text, google_docs_ids, uploaded_files, documents_folder, in
 
     if not test_doc:
         doc_ids = ''
-        for doc__id in list(models.Document.objects.filter(business_unit=business_unit).values_list(
-                'document_id', flat=True)):
-            doc_ids += f"{doc__id}\n"
+        for doc in models.Document.objects.filter(business_unit=business_unit):
+            doc_id = doc.document_id if doc.document_id else doc.file.name
+            doc_ids += f"{doc_id}\n"
         business_unit.documents_list = doc_ids
         business_unit.save()
 

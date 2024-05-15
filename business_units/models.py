@@ -11,6 +11,7 @@ class BusinessUnit(models.Model):
     GPT_3_5_TURBO_NEW = "gpt-3.5-turbo-1106"
     GPT_4 = "gpt-4"
     GPT_4_TURBO = "gpt-4-1106-preview"
+    GPT_4_O = "gpt-4o"
 
     STRICT_MODE = 1
     MANAGER_FLOW = 2
@@ -33,6 +34,7 @@ class BusinessUnit(models.Model):
         (GPT_3_5_TURBO_NEW, "Gpt 3.5 new turbo"),
         (GPT_4, "Gpt 4"),
         (GPT_4_TURBO, "Gpt 4 preview (Turbo)"),
+        (GPT_4_O, "Gpt 4 Omni"),
     )
 
     SENDER = (

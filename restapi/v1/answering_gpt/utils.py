@@ -64,16 +64,20 @@ def determine_response_text(business_unit, response_q):
 
 
 def send_response(business_unit, user_q, text_parts, contact_id, source_type, response_text, llm_context):
+    if response_text == "manager":
+        request_type = 'word_trigger'
+    else:
+        request_type = 'send_message'
     if business_unit.sending_service == BusinessUnit.SEND_PULSE:
         sendpulse_response = [
-            send_pulse_flow(request_type="send_message", business_units=business_unit, contact_id=contact_id,
+            send_pulse_flow(request_type=request_type, business_units=business_unit, contact_id=contact_id,
                             part=part, source_type=source_type).content.decode('utf-8')
             for part in text_parts
         ]
         return {"user_question": user_q, "response": response_text, "chunks": llm_context,
                 "sendpulse_cont": sendpulse_response}
     else:
-        r = smart_sender_flow(request_type="send_message", business_units=business_unit, contact_id=contact_id,
+        r = smart_sender_flow(request_type=request_type, business_units=business_unit, contact_id=contact_id,
                               response=response_text)
         return {"user_question": user_q, "response": response_text,
                 "smart_sender": r.content.decode('utf-8')}

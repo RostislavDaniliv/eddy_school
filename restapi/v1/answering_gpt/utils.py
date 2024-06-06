@@ -64,7 +64,7 @@ def determine_response_text(business_unit, response_q):
 
 
 def send_response(business_unit, user_q, text_parts, contact_id, source_type, response_text, llm_context):
-    if response_text == "manager":
+    if response_text == "manager" or response_text == "менеджер" or response_text == "Менеджер":
         request_type = 'word_trigger'
     else:
         request_type = 'send_message'

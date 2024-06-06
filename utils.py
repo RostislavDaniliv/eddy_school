@@ -432,7 +432,7 @@ def send_pulse_flow(request_type, business_units, contact_id=None, source_type=N
 
         request_data = {
             "contact_id": contact_id,
-            "trigger_keyword": business_units.default_text,
+            "trigger_keyword": kwargs.get("part", business_units.default_text),
         }
 
         r = requests.post(

@@ -44,6 +44,8 @@ SEND_PULSE_VIBER_RUN_BY_TRIGGER = '/viber/chatbots/flows/runByTrigger'
 SEND_PULSE_LIVE_CHAT_MESSAGE = '/live-chat/contacts/send'
 SEND_PULSE_LIVE_CHAT_RUN_BY_TRIGGER = '/live-chat/flows/runByTrigger'
 
+SEND_PULSE_MESSENGER_MESSAGE = '/messenger/contacts/sendText'
+
 SMART_SENDER_MESSAGE = '/v1/contacts/{contactId}/send'
 SMART_SENDER_RUN_BY_TRIGGER = '/v1/contacts/{contactId}/fire'
 
@@ -462,6 +464,13 @@ def send_pulse_flow(request_type, business_units, contact_id=None, source_type=N
                         }
                     }
                 ]
+            })
+            return r
+
+        elif part and source_type == "messenger":
+            r = requests.post(f'{SEND_PULSE_URL}{SEND_PULSE_MESSENGER_MESSAGE}', headers=headers, data={
+                "contact_id": contact_id,
+                "text": part
             })
             return r
 

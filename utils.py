@@ -73,7 +73,7 @@ REFINE_PROMPT = (
 
 def get_credentials(file_url):
     credentials = ServiceAccountCredentials.from_json_keyfile_name(
-        file_url, SCOPES
+        '/Users/rostik/PycharmProjects/eddy_school/new_token.json', SCOPES
     )
     return credentials
 
@@ -470,7 +470,9 @@ def send_pulse_flow(request_type, business_units, contact_id=None, source_type=N
         elif part and source_type == "messenger":
             r = requests.post(f'{SEND_PULSE_URL}{SEND_PULSE_MESSENGER_MESSAGE}', headers=headers, data={
                 "contact_id": contact_id,
+                "message_type": "RESPONSE",
                 "text": part
+
             })
             return r
 

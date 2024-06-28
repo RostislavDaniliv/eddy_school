@@ -1,9 +1,12 @@
+import os
 import random
 import re
 import string
 
 from django.core.validators import MaxValueValidator, MinValueValidator
 from django.db import models
+
+from eddy_school import settings
 
 
 class BusinessUnit(models.Model):
@@ -57,7 +60,9 @@ class BusinessUnit(models.Model):
     smart_sender_token = models.TextField(blank=True, verbose_name="Smartsender token")
     last_update_sendpulse = models.DateTimeField(auto_now=False, blank=True, null=True)
     last_used_documents_list = models.TextField(blank=True, verbose_name="last used documents list")
-    google_creds = models.FileField(upload_to='google_creds/', null=True, verbose_name="google credentials")
+    google_creds = models.FileField(upload_to='google_creds/',
+                                    default=os.path.join(settings.BASE_DIR, 'default_key.json'), null=True,
+                                    verbose_name="google credentials")
     default_text = models.CharField(max_length=600, blank=True, verbose_name="default text")
     panic_text = models.CharField(max_length=600, blank=True, verbose_name="panic text")
     last_update_document = models.DateTimeField(auto_now=False, blank=True, null=True)

@@ -471,6 +471,7 @@ def send_pulse_flow(request_type, business_units, contact_id=None, source_type=N
             r = requests.post(f'{SEND_PULSE_URL}{SEND_PULSE_MESSENGER_MESSAGE}', headers=headers, data={
                 "contact_id": contact_id,
                 "message_type": "RESPONSE",
+                "message_tag": "ACCOUNT_UPDATE",
                 "text": part
 
             })

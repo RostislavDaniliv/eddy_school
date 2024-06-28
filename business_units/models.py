@@ -61,7 +61,7 @@ class BusinessUnit(models.Model):
     last_update_sendpulse = models.DateTimeField(auto_now=False, blank=True, null=True)
     last_used_documents_list = models.TextField(blank=True, verbose_name="last used documents list")
     google_creds = models.FileField(upload_to='google_creds/',
-                                    default='media/google_creds/default_key.json', null=True,
+                                    default='google_creds/default_key.json', null=True,
                                     verbose_name="google credentials")
     default_text = models.CharField(max_length=600, blank=True, verbose_name="default text")
     panic_text = models.CharField(max_length=600, blank=True, verbose_name="panic text")
